@@ -1,0 +1,974 @@
+/* ==========================================================================
+   虹光流序・電子微塵・夢幻漩渦 - 視覺樣式表
+   設計風格：當代先鋒東方美學 (Avant-Garde Editorial Luxury)
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Serif+SC:wght@300;400;600&family=Noto+Serif+TC:wght@300;400;600&family=Space+Grotesk:wght@300;400;500&display=swap');
+
+:root {
+  --font-serif: 'Cinzel', 'Noto Serif TC', 'Noto Serif SC', 'Songti SC', 'STSong', 'PMingLiU', serif;
+  --font-chinese-serif: 'Noto Serif TC', 'Noto Serif SC', 'Songti SC', 'STSong', 'PMingLiU', serif;
+  --font-body: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  --color-dark: #090a0f;
+  --color-light: #f5f5f7;
+  --color-accent: #6ee7b7;
+  --glass-bg: rgba(14, 16, 24, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.16);
+  --glass-hover: rgba(255, 255, 255, 0.22);
+
+  /* 疊加微色散 (Overlapping Chromatic Aberration - 各光譜通道微位移交疊，而非色相排排站) */
+  --glass-dispersion-shadow:
+    -0.8px -0.4px 0.6px rgba(255, 45, 95, 0.35),
+    0.8px 0.4px 0.6px rgba(0, 210, 255, 0.35),
+    -0.3px 0.6px 0.6px rgba(255, 200, 50, 0.22),
+    0.3px -0.6px 0.6px rgba(160, 75, 255, 0.22),
+    inset -0.6px -0.3px 0.6px rgba(255, 45, 95, 0.22),
+    inset 0.6px 0.3px 0.6px rgba(0, 210, 255, 0.22),
+    inset 0 1px 1px rgba(255, 255, 255, 0.9),
+    0 4px 16px rgba(0, 0, 0, 0.05);
+
+  --glass-dispersion-shadow-hover:
+    -1.1px -0.6px 1px rgba(255, 45, 95, 0.48),
+    1.1px 0.6px 1px rgba(0, 210, 255, 0.48),
+    -0.4px 0.8px 0.8px rgba(255, 200, 50, 0.28),
+    0.4px -0.8px 0.8px rgba(160, 75, 255, 0.28),
+    inset -0.8px -0.4px 0.8px rgba(255, 45, 95, 0.28),
+    inset 0.8px 0.4px 0.8px rgba(0, 210, 255, 0.28),
+    inset 0 1px 1.5px #ffffff,
+    0 8px 24px rgba(0, 0, 0, 0.08);
+
+  /* 純淨無色透明霧面毛玻璃 (100% Colorless Frosted Glass Inside) */
+  --glass-frosted-bg: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.58) 0%,
+    rgba(255, 255, 255, 0.28) 100%
+  );
+  --glass-frosted-bg-hover: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.75) 0%,
+    rgba(255, 255, 255, 0.45) 100%
+  );
+  --glass-text-color: #111116;
+  --glass-text-muted: rgba(20, 20, 28, 0.70);
+  --glass-border-color: rgba(255, 255, 255, 0.75);
+}
+
+body[data-theme="dark"] {
+  --glass-frosted-bg: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  --glass-frosted-bg-hover: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.20) 0%,
+    rgba(255, 255, 255, 0.08) 100%
+  );
+  --glass-text-color: #ffffff;
+  --glass-text-muted: rgba(255, 255, 255, 0.72);
+  --glass-border-color: rgba(255, 255, 255, 0.22);
+  --glass-dispersion-shadow:
+    -0.8px -0.4px 0.6px rgba(255, 45, 95, 0.35),
+    0.8px 0.4px 0.6px rgba(0, 210, 255, 0.35),
+    -0.3px 0.6px 0.6px rgba(255, 200, 50, 0.20),
+    0.3px -0.6px 0.6px rgba(160, 75, 255, 0.20),
+    inset -0.6px -0.3px 0.6px rgba(255, 45, 95, 0.25),
+    inset 0.6px 0.3px 0.6px rgba(0, 210, 255, 0.25),
+    inset 0 1px 1px rgba(255, 255, 255, 0.45),
+    0 8px 25px rgba(0, 0, 0, 0.35);
+  --glass-dispersion-shadow-hover:
+    -1.1px -0.6px 1px rgba(255, 45, 95, 0.48),
+    1.1px 0.6px 1px rgba(0, 210, 255, 0.48),
+    -0.4px 0.8px 0.8px rgba(255, 200, 50, 0.25),
+    0.4px -0.8px 0.8px rgba(160, 75, 255, 0.25),
+    inset -0.8px -0.4px 0.8px rgba(255, 45, 95, 0.30),
+    inset 0.8px 0.4px 0.8px rgba(0, 210, 255, 0.30),
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.65),
+    0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--color-dark);
+  font-family: var(--font-body);
+  color: var(--color-light);
+  cursor: default;
+}
+
+/* ==========================================================================
+   全螢幕 WebGL Canvas
+   ========================================================================== */
+#gl-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1;
+  display: block;
+}
+
+/* ==========================================================================
+   自定義游標跟隨器 (Custom Cursor)
+   ========================================================================== */
+.cursor-dot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  background-color: #ffffff;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 999;
+  transform: translate(-50%, -50%);
+  transition: transform 0.08s ease-out, background-color 0.2s ease;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
+
+.cursor-ring {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 998;
+  transform: translate(-50%, -50%);
+  transition: width 0.25s ease, height 0.25s ease, border-color 0.25s ease;
+  backdrop-filter: blur(1px);
+}
+
+body.interacting .cursor-ring {
+  width: 68px;
+  height: 68px;
+  border-color: rgba(147, 197, 253, 0.8);
+  box-shadow: 0 0 20px rgba(167, 139, 250, 0.4);
+}
+
+body.cursor-over-ui .cursor-ring {
+  opacity: 0.25;
+  transform: translate(-50%, -50%) scale(0.65);
+}
+
+/* ==========================================================================
+   1. 動態反白文字層 (Dynamic Inversion Text Layer)
+   利用 mix-blend-mode: difference 實現當流光、墨影經過時動態反白與高對比折射
+   ========================================================================== */
+.inversion-text-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* 頂部標題 - Y軸置中 */
+.brand-title {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  left: 3.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  pointer-events: auto;
+  color: #ffffff;
+}
+
+.brand-main {
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  letter-spacing: 0.48em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.brand-sub {
+  font-family: var(--font-chinese-serif);
+  font-size: 0.72rem;
+  letter-spacing: 0.35em;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  opacity: 0.85;
+}
+
+.brand-sub .dot-sep {
+  width: 3px;
+  height: 3px;
+  background-color: #ffffff;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* 垂直詩詞與理念表達 (Vertical Editorial Typography) */
+.poetry-container {
+  position: fixed;
+  right: 3.5rem;
+  top: 25%;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2.4rem;
+  color: #ffffff;
+}
+
+.poem-line {
+  font-family: var(--font-chinese-serif);
+  font-size: 1.22rem;
+  font-weight: 400;
+  letter-spacing: 0.55em;
+  color: #ffffff;
+  position: relative;
+  line-height: 1.6;
+}
+
+.poem-annotation {
+  font-size: 0.65rem;
+  letter-spacing: 0.25em;
+  color: #ffffff;
+  font-family: monospace;
+  opacity: 0.75;
+}
+
+/* ==========================================================================
+   2. 互動控制層 (Interactive Controls Layer)
+   採用實體深色玻璃擬態，獨立於反白層，確保操作按鈕恆常清晰可讀
+   ========================================================================== */
+.controls-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 2.5rem 3.5rem;
+}
+
+.controls-layer.hidden-ui {
+  opacity: 0;
+  pointer-events: none !important;
+}
+
+.meta-badge {
+  font-size: 0.7rem;
+  font-family: monospace;
+  letter-spacing: 0.15em;
+  padding: 0.45rem 0.95rem;
+  border: 1px solid var(--glass-border-color);
+  background: var(--glass-frosted-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-radius: 999px;
+  color: var(--glass-text-color);
+  transition: all 0.3s ease;
+  box-shadow: var(--glass-dispersion-shadow);
+}
+
+.btn-interactive {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.btn-interactive:hover {
+  background: var(--glass-frosted-bg-hover);
+  box-shadow: var(--glass-dispersion-shadow-hover);
+  transform: translateY(-1px);
+}
+
+.sound-btn.active {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  box-shadow: 0 0 16px rgba(110, 231, 183, 0.35);
+}
+
+/* 底部互動控制欄 (Interactive Controls Dock) */
+.bottom-dock {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  pointer-events: none;
+  transition: opacity 0.42s cubic-bezier(0.16, 1, 0.3, 1), transform 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bottom-dock > * {
+  pointer-events: auto;
+}
+
+/* 專注模式 (僅眼睛按鈕，其他全隱藏) */
+.bottom-dock.mode-hide-buttons .preset-switcher,
+.bottom-dock.mode-hide-buttons #hide-all-btn,
+.bottom-dock.mode-hide-buttons #pause-btn,
+.bottom-dock.mode-hide-buttons #capture-btn,
+.bottom-dock.mode-hide-buttons .panel-anchor-wrapper {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transition: opacity 0.35s ease, visibility 0.35s ease;
+}
+
+.bottom-dock.mode-hide-buttons #hide-buttons-btn {
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity 0.42s cubic-bezier(0.16, 1, 0.3, 1), transform 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bottom-dock.mode-hide-buttons #hide-buttons-btn.revealed,
+.bottom-dock.mode-hide-buttons #hide-buttons-btn:hover {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.bottom-dock.mode-hide-buttons #hide-buttons-btn::before {
+  content: '';
+  position: absolute;
+  top: -22px;
+  bottom: -22px;
+  left: -22px;
+  right: -22px;
+  border-radius: 50%;
+  pointer-events: auto;
+}
+
+/* 全螢幕純淨模式 (僅放大按鈕，其他全隱藏) */
+.bottom-dock.mode-hide-all .preset-switcher,
+.bottom-dock.mode-hide-all #hide-buttons-btn,
+.bottom-dock.mode-hide-all #pause-btn,
+.bottom-dock.mode-hide-all #capture-btn,
+.bottom-dock.mode-hide-all .panel-anchor-wrapper {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transition: opacity 0.35s ease, visibility 0.35s ease;
+}
+
+.bottom-dock.mode-hide-all #hide-all-btn {
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity 0.42s cubic-bezier(0.16, 1, 0.3, 1), transform 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bottom-dock.mode-hide-all #hide-all-btn.revealed,
+.bottom-dock.mode-hide-all #hide-all-btn:hover {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.bottom-dock.mode-hide-all #hide-all-btn::before {
+  content: '';
+  position: absolute;
+  top: -22px;
+  bottom: -22px;
+  left: -22px;
+  right: -22px;
+  border-radius: 50%;
+  pointer-events: auto;
+}
+
+/* 模式選擇膠囊容器 (100% Colorless Frosted Glass with Overlapping Chromatic Dispersion) */
+.preset-switcher {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border-color);
+  background: var(--glass-frosted-bg);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: var(--glass-dispersion-shadow);
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.preset-switcher:hover {
+  box-shadow: var(--glass-dispersion-shadow-hover);
+}
+
+/* 絲滑滑動指示膠囊 (Silky Sliding Indicator Pill) */
+.preset-pill-indicator {
+  position: absolute;
+  top: 0.35rem;
+  bottom: 0.35rem;
+  left: 0;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 
+    -0.6px -0.3px 0.5px rgba(255, 45, 95, 0.28),
+    0.6px 0.3px 0.5px rgba(0, 210, 255, 0.28),
+    -0.2px 0.4px 0.5px rgba(255, 200, 50, 0.18),
+    0.2px -0.4px 0.5px rgba(160, 75, 255, 0.18),
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    inset 0 1px 1px #ffffff;
+  transition: 
+    transform 0.42s cubic-bezier(0.16, 1, 0.3, 1),
+    width 0.42s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.25s ease,
+    background 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
+  will-change: transform, width;
+}
+
+body[data-theme="dark"] .preset-pill-indicator {
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 
+    -0.6px -0.3px 0.5px rgba(255, 45, 95, 0.32),
+    0.6px 0.3px 0.5px rgba(0, 210, 255, 0.32),
+    0 2px 8px rgba(0, 0, 0, 0.25),
+    inset 0 1px 1px rgba(255, 255, 255, 0.6);
+}
+
+/* 模式切換按鈕 (Preset Buttons) */
+.preset-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--glass-text-muted);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  padding: 0.46rem 1.05rem;
+  border-radius: 999px;
+  cursor: pointer;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: color 0.32s cubic-bezier(0.16, 1, 0.3, 1), background 0.25s ease;
+  position: relative;
+  z-index: 2;
+  white-space: nowrap;
+}
+
+.preset-btn:hover:not(.active) {
+  color: var(--glass-text-color);
+  background: rgba(255, 255, 255, 0.24);
+}
+
+body[data-theme="dark"] .preset-btn:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* 選中項：純淨白水晶磨砂 (內部無色，文字由滑動膠囊托起) */
+.preset-btn.active {
+  color: #000000;
+  font-weight: 500;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+body[data-theme="dark"] .preset-btn.active {
+  color: #ffffff;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* 動作按鈕感應容器 (Hover Sensing Container) */
+.dock-actions-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  pointer-events: auto;
+}
+
+/* 隱藏模式下，按鈕感應熱區擴展，使游標移至右下角按鈕區域時能敏銳捕獲 */
+/* 圖示切換 (一般狀態 vs 啟用/退出狀態) */
+#hide-buttons-btn .icon-eye-off {
+  display: none;
+}
+#hide-buttons-btn.active .icon-eye {
+  display: none;
+}
+#hide-buttons-btn.active .icon-eye-off {
+  display: block;
+}
+
+#hide-all-btn .icon-minimize {
+  display: none;
+}
+#hide-all-btn.active .icon-maximize {
+  display: none;
+}
+#hide-all-btn.active .icon-minimize {
+  display: block;
+}
+
+#pause-btn .icon-play {
+  display: none;
+}
+#pause-btn.active .icon-pause {
+  display: none;
+}
+#pause-btn.active .icon-play {
+  display: block;
+}
+
+.dock-actions {
+  display: flex;
+  gap: 0.85rem;
+}
+
+/* 操作按鈕 (Action Buttons with Pure Colorless Glass & Overlapping Dispersion - Icon Only) */
+.action-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--glass-border-color);
+  background: var(--glass-frosted-bg);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  color: var(--glass-text-color);
+  cursor: pointer;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--glass-dispersion-shadow);
+  flex-shrink: 0;
+}
+
+.action-btn svg {
+  display: block;
+  stroke: currentColor;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.08));
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+  background: var(--glass-frosted-bg-hover);
+  box-shadow: var(--glass-dispersion-shadow-hover);
+  color: var(--glass-text-color);
+}
+
+.action-btn:hover svg {
+  transform: scale(1.12);
+}
+
+.action-btn:active {
+  transform: translateY(0) scale(0.95);
+}
+
+/* 調校細節按鈕定位包裝層 (Anchor wrapper for details button) */
+.panel-anchor-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.action-btn.active,
+#toggle-panel-btn.active {
+  background: var(--glass-frosted-bg-hover);
+  box-shadow: var(--glass-dispersion-shadow-hover);
+  border-color: rgba(255, 255, 255, 0.95);
+}
+
+body[data-theme="dark"] .action-btn.active,
+body[data-theme="dark"] #toggle-panel-btn.active {
+  background: rgba(255, 255, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+#toggle-panel-btn svg {
+  transition: transform 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#toggle-panel-btn.active svg {
+  transform: scale(1.12);
+}
+
+/* ==========================================================================
+   參數調節抽屜面板 (Control Drawer Panel with Pure Colorless Glass & 1px Dispersion Rim)
+   展開於「設定」按鈕正上方 (Anchored directly above the button)
+   ========================================================================== */
+.controls-panel {
+  position: absolute;
+  bottom: calc(100% + 0.85rem);
+  left: auto;
+  right: 0;
+  transform: translateY(14px) scale(0.95);
+  transform-origin: calc(100% - 20px) bottom;
+  width: 330px;
+  max-height: calc(100vh - 8.5rem);
+  overflow-y: auto;
+  border: 1px solid var(--glass-border-color);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.84) 0%, rgba(255, 255, 255, 0.62) 100%);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-radius: 20px;
+  padding: 1.6rem 1.7rem;
+  z-index: 50;
+  opacity: 0;
+  pointer-events: none;
+  transition: 
+    opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.35s ease;
+  box-shadow:
+    var(--glass-dispersion-shadow),
+    0 20px 50px rgba(0, 0, 0, 0.12);
+  color: var(--glass-text-color);
+}
+
+body[data-theme="dark"] .controls-panel {
+  background: linear-gradient(135deg, rgba(32, 36, 48, 0.85) 0%, rgba(18, 22, 32, 0.90) 100%);
+  box-shadow:
+    var(--glass-dispersion-shadow),
+    0 24px 50px rgba(0, 0, 0, 0.55);
+  color: #ffffff;
+}
+
+.controls-panel.open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.controls-panel::-webkit-scrollbar {
+  width: 4px;
+}
+
+.controls-panel::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+
+body[data-theme="dark"] .controls-panel::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.4rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+body[data-theme="dark"] .panel-header {
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+
+.panel-title {
+  font-size: 0.85rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--glass-text-color);
+}
+
+.panel-close {
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--glass-text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+  transition: all 0.25s ease;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+body[data-theme="dark"] .panel-close {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.panel-close:hover {
+  color: var(--glass-text-color);
+  background: rgba(0, 0, 0, 0.1);
+  transform: scale(1.1);
+}
+
+body[data-theme="dark"] .panel-close:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+
+.slider-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.slider-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.slider-label-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: var(--glass-text-muted);
+}
+
+.slider-val {
+  font-family: monospace;
+  font-weight: 600;
+  color: var(--glass-text-color);
+}
+
+body[data-theme="dark"] .slider-val {
+  color: #ffffff;
+}
+
+.custom-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.10);
+  border-radius: 2px;
+  outline: none;
+}
+
+body[data-theme="dark"] .custom-range {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.custom-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  box-shadow: 
+    -0.5px -0.5px 2px rgba(255, 90, 130, 0.25),
+    0.5px 0.5px 2px rgba(40, 195, 255, 0.25),
+    0 2px 6px rgba(0, 0, 0, 0.15);
+  transition: transform 0.15s ease;
+}
+
+.custom-range::-webkit-slider-thumb:hover {
+  transform: scale(1.3);
+}
+
+.bg-mode-selector {
+  position: relative;
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.8rem;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 0.25rem;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-sizing: border-box;
+}
+
+body[data-theme="dark"] .bg-mode-selector {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+.bg-pill-indicator {
+  position: absolute;
+  top: 0.25rem;
+  bottom: 0.25rem;
+  left: 0;
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  box-sizing: border-box;
+  transition: 
+    transform 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+    width 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.25s ease,
+    background 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
+  will-change: transform, width;
+}
+
+body[data-theme="dark"] .bg-pill-indicator {
+  background: rgba(255, 255, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.40);
+  box-shadow: 
+    -0.8px -0.4px 2px rgba(255, 90, 130, 0.25),
+    0.8px 0.4px 2px rgba(40, 195, 255, 0.25),
+    inset 0 1px 1px rgba(255, 255, 255, 0.65);
+}
+
+.bg-btn {
+  position: relative;
+  z-index: 2;
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.25rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--glass-text-muted);
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  transition: color 0.3s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease;
+  text-align: center;
+}
+
+body[data-theme="dark"] .bg-btn {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.bg-btn:hover:not(.active) {
+  color: var(--glass-text-color);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+body[data-theme="dark"] .bg-btn:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.10);
+  color: #ffffff;
+}
+
+.bg-btn.active {
+  color: #000000;
+  font-weight: 500;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+body[data-theme="dark"] .bg-btn.active {
+  color: #ffffff;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* ==========================================================================
+   提示小標籤 (Toast with Pure Colorless Glass & 1px Dispersion Rim)
+   ========================================================================== */
+.toast {
+  position: fixed;
+  top: 2rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  border: 1px solid var(--glass-border-color);
+  background: var(--glass-frosted-bg);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  color: var(--glass-text-color);
+  padding: 0.6rem 1.4rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 900;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--glass-dispersion-shadow);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ==========================================================================
+   響應式適配 (Mobile & Tablet)
+   ========================================================================== */
+@media (max-width: 900px) {
+  .controls-layer {
+    padding: 1.8rem 1.5rem;
+  }
+  
+  .brand-title {
+    top: 50%;
+    transform: translateY(-50%);
+    left: 1.5rem;
+  }
+  
+  .poetry-container {
+    display: none;
+  }
+  
+  .brand-main {
+    font-size: 1.1rem;
+    letter-spacing: 0.35em;
+  }
+  
+  .preset-switcher {
+    overflow-x: auto;
+    max-width: 50vw;
+  }
+  
+  .dock-actions {
+    gap: 0.55rem;
+  }
+  
+  .controls-panel {
+    position: fixed;
+    left: 1.2rem;
+    right: 1.2rem;
+    width: auto;
+    bottom: 5.5rem;
+    transform: translateY(14px) scale(0.96);
+    transform-origin: center bottom;
+  }
+
+  .controls-panel.open {
+    transform: translateY(0) scale(1);
+  }
+}
