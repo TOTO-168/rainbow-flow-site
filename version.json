@@ -1,5 +1,5 @@
 {
-  "version": "1.2.2",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.2/RainbowFlow.zip",
-  "notes": "修正 macOS 26 控制中心選單列圖示顯示與幽靈選單問題；升級獨立識別碼與單一實例清理。"
+  "version": "1.2.3",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.3/RainbowFlow.zip",
+  "notes": "選單簡化：移除 Esc 操作提示項目；版本資訊改為純顯示且不可點擊。"
 }
