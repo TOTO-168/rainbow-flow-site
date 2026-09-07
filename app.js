@@ -1495,6 +1495,7 @@ class IridescentApp {
       this.state.hideTimer = null;
     }
 
+    const prevMode = this.state.viewMode;
     this.state.viewMode = mode;
     const bottomDock = document.querySelector('.bottom-dock');
     const hideButtonsBtn = document.getElementById('hide-buttons-btn');
@@ -1508,6 +1509,27 @@ class IridescentApp {
     if (bottomDock) {
       bottomDock.classList.toggle('mode-hide-buttons', mode === 'hide_buttons');
       bottomDock.classList.toggle('mode-hide-all', mode === 'hide_all');
+
+      // 退出專注模式或全螢幕純淨模式時，觸發絲滑物理彈出動畫
+      if ((prevMode === 'hide_buttons' || prevMode === 'hide_all') && mode === 'normal') {
+        if (this.dockSpringTimer) {
+          clearTimeout(this.dockSpringTimer);
+          this.dockSpringTimer = null;
+        }
+        bottomDock.classList.remove('dock-spring-in');
+        void bottomDock.offsetWidth; // 強制重繪以重啟動畫
+        bottomDock.classList.add('dock-spring-in');
+        this.dockSpringTimer = setTimeout(() => {
+          if (bottomDock) bottomDock.classList.remove('dock-spring-in');
+          this.dockSpringTimer = null;
+        }, 800);
+      } else if (mode !== 'normal') {
+        if (this.dockSpringTimer) {
+          clearTimeout(this.dockSpringTimer);
+          this.dockSpringTimer = null;
+        }
+        bottomDock.classList.remove('dock-spring-in');
+      }
     }
 
     // Toggle active state (changes icon)
