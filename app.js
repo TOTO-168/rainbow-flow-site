@@ -32,7 +32,7 @@ const fragmentShaderSource = `
   uniform int u_preset_from;     // 過渡來源風格
   uniform int u_preset_to;       // 過渡目標風格
   uniform float u_preset_mix;    // 0.0 ~ 1.0 絲滑過渡進度
-  uniform vec3 u_bg_weights;     // 背景底色混合權重 (x: 水墨, y: 玄黑, z: 紙白)
+  uniform float u_bg_weights[5]; // 背景底色混合權重 (0: 水墨, 1: 玄黑, 2: 紙白, 3: 黛藍, 4: 赤霞)
   uniform float u_flow_speed;    // 流速
   uniform float u_dispersion;    // 色散強度
   uniform float u_grain;         // 電子塵埃顆粒強度
@@ -101,7 +101,7 @@ const fragmentShaderSource = `
       vec3 c = vec3(0.9, 1.1, 0.85);
       vec3 d = vec3(0.35, 0.15, 0.60);
       return a + b * cos(2.0 * PI * (c * t + d));
-    } else {
+    } else if (preset == 3) {
       // 3: 浮光過隙 - 高飽和電光全息極光
       vec3 a = vec3(0.50, 0.50, 0.50);
       vec3 b = vec3(0.60, 0.60, 0.60);
@@ -110,6 +110,17 @@ const fragmentShaderSource = `
       vec3 col = a + b * cos(2.0 * PI * (c * t + d));
       col = mix(col, vec3(0.0, 1.0, 0.88), smoothstep(0.20, 0.45, fract(t * 1.6)) * 0.5);
       col = mix(col, vec3(1.0, 0.15, 0.65), smoothstep(0.60, 0.85, fract(t * 1.6)) * 0.5);
+      return col;
+    } else {
+      // 4: 晶透琉璃 - 琥珀流金、寶石翡翠、孔雀靛藍與紫晶琉璃
+      vec3 a = vec3(0.66, 0.56, 0.64);
+      vec3 b = vec3(0.46, 0.42, 0.48);
+      vec3 c = vec3(1.15, 0.85, 1.05);
+      vec3 d = vec3(0.16, 0.44, 0.82);
+      vec3 col = a + b * cos(2.0 * PI * (c * t + d));
+      col = mix(col, vec3(1.0, 0.80, 0.26), smoothstep(0.18, 0.38, fract(t * 1.5)) * 0.48);
+      col = mix(col, vec3(0.10, 0.96, 0.78), smoothstep(0.52, 0.72, fract(t * 1.5)) * 0.42);
+      col = mix(col, vec3(0.88, 0.32, 0.95), smoothstep(0.78, 0.98, fract(t * 1.5)) * 0.36);
       return col;
     }
   }
@@ -301,7 +312,7 @@ const fragmentShaderSource = `
 
       htAngle = PI * 0.15;
 
-    } else {
+    } else if (preset == 3) {
       // 模式 3: 浮光過隙 (Aurora Rift)
       float riftSpine = sin(twistedP.y * 1.5 + t * 0.5) * 0.36 + cos(twistedP.y * 0.75 - t * 0.2) * 0.16;
       float taper = clamp(0.70 - twistedP.y * 0.35, 0.30, 1.25);
@@ -331,7 +342,49 @@ const fragmentShaderSource = `
       float shadowWidth = riftWidth * 2.1;
       darkVoid = exp(-pow(shadowDist / shadowWidth, 2.0) * 3.0);
 
+      htAngle = PI * 0.40;
+
+    } else {
+      // 模式 4: 晶透琉璃 (Prismatic Glaze)
+      // 晶體切面幾何折線、液態琉璃的高折射率反光與焦散
+      float spineWave1 = sin(twistedP.y * 1.9 + t * 0.58) * 0.30;
+      float spineWave2 = cos(twistedP.y * 3.4 - t * 0.42) * 0.12;
+      float crystalFacet = sin(twistedP.y * 7.0 + t * 0.75) * 0.045;
+      spineX = spineWave1 + spineWave2 + crystalFacet;
+      dx = twistedP.x - spineX;
+
+      float glassWidth = 0.23 + 0.09 * sin(twistedP.y * 2.8 + t * 0.45);
+      float absDx = abs(dx);
+      float normDist = absDx / max(glassWidth, 0.01);
+
+      float coreSharpness = mix(16.0, 5.5, u_defocus);
+      ribbonCore = exp(-normDist * normDist * coreSharpness);
+
+      // 琉璃內部折射稜面 (棱角焦散折光)
+      float facetRidge = cos(dx * 28.0 + twistedP.y * 12.0 - t * 1.5);
+      float internalCaustic = exp(-pow(normDist * 1.3, 2.0) * 8.0) * (0.6 + 0.4 * facetRidge);
+      ribbonCore = max(ribbonCore, internalCaustic * 0.95);
+      ribbonAura = exp(-normDist * 1.6) * 0.48;
+
+      flowCoord = twistedP.y * 1.5 - dx * 2.5 + t * 0.52 + facetRidge * 0.06;
+      vec3 colR = spectralPalette(flowCoord + disp * 1.5, 4);
+      vec3 colG = spectralPalette(flowCoord, 4);
+      vec3 colB = spectralPalette(flowCoord - disp * 1.5, 4);
+      ribbonColor = vec3(colR.r, colG.g, colB.b);
+
+      // 琉璃鑽石稜鏡雙重高光
+      float specularCenter = pow(clamp(1.0 - normDist * 1.6, 0.0, 1.0), 4.5);
+      float specularRim = pow(clamp(1.0 - abs(normDist - 0.72) * 3.5, 0.0, 1.0), 3.0) * 0.6;
+      ribbonColor += vec3(1.0, 0.98, 0.92) * specularCenter * 0.85;
+      ribbonColor += vec3(0.70, 0.95, 1.0) * specularRim * 0.60;
+
+      float shadowCenter = 0.14 * glassWidth;
+      float shadowDist = abs(dx - shadowCenter);
+      float shadowWidth = glassWidth * 1.9;
+      darkVoid = exp(-pow(shadowDist / shadowWidth, 2.0) * 3.2);
+
       htAngle = PI * 0.35;
+      htScale = mix(75.0, 165.0, u_halftone_scale);
     }
   }
 
@@ -471,16 +524,22 @@ const fragmentShaderSource = `
     ribbonCore *= verticalFade;
     ribbonAura *= verticalFade;
 
-    // 背景設定 (平滑淡入淡出三種背景底色，絲滑過渡絕不硬切)
+    // 背景設定 (平滑淡入淡出五種背景底色，絲滑過渡絕不硬切)
     vec3 paperWhite = vec3(0.97, 0.97, 0.98);
     vec3 voidDark   = vec3(0.05, 0.06, 0.08);
 
     float subtleSplit = smoothstep(0.35, -0.35, twistedP.x - spineX * 0.5);
-    vec3 mode0Bg = mix(paperWhite, vec3(0.08, 0.09, 0.12), subtleSplit * 0.92);
-    vec3 mode1Bg = voidDark;
-    vec3 mode2Bg = paperWhite;
+    vec3 mode0Bg = mix(paperWhite, vec3(0.08, 0.09, 0.12), subtleSplit * 0.92);                          // 0: 水墨 (雙色水墨)
+    vec3 mode1Bg = voidDark;                                                                              // 1: 玄黑 (純粹玄黑)
+    vec3 mode2Bg = paperWhite;                                                                            // 2: 紙白 (明亮宣紙)
+    vec3 mode3Bg = mix(vec3(0.025, 0.048, 0.095), vec3(0.045, 0.082, 0.145), twistedP.y * 0.35 + 0.5); // 3: 黛藍 (深邃礦物靛藍)
+    vec3 mode4Bg = mix(vec3(0.085, 0.032, 0.048), vec3(0.138, 0.054, 0.076), twistedP.y * 0.35 + 0.5); // 4: 赤霞 (溫潤宮廷絳霞)
 
-    vec3 canvasBg = mode0Bg * u_bg_weights.x + mode1Bg * u_bg_weights.y + mode2Bg * u_bg_weights.z;
+    vec3 canvasBg = mode0Bg * u_bg_weights[0] +
+                    mode1Bg * u_bg_weights[1] +
+                    mode2Bg * u_bg_weights[2] +
+                    mode3Bg * u_bg_weights[3] +
+                    mode4Bg * u_bg_weights[4];
 
     vec3 baseScene = mix(canvasBg, voidDark, darkVoid * 0.95);
     vec3 compositeColor = mix(baseScene, ribbonColor, clamp(ribbonCore * 1.25 + ribbonAura * 0.6, 0.0, 1.0));
@@ -503,7 +562,7 @@ const fragmentShaderSource = `
     // ----------------------------------------------------------------------
     vec3 shimmerLight = vec3(rippleShimmer * 0.13);
     vec3 shimmerDark = vec3(0.92, 0.96, 1.0) * rippleShimmer * 0.18;
-    vec3 rippleShimmerCol = mix(shimmerDark, shimmerLight, u_bg_weights.z);
+    vec3 rippleShimmerCol = mix(shimmerDark, shimmerLight, u_bg_weights[2]);
     compositeColor += rippleShimmerCol;
 
     compositeColor = clamp(compositeColor, 0.0, 1.0);
@@ -714,8 +773,8 @@ class IridescentApp {
     const defaults = this.getDefaultSettings();
     const s = Object.assign({}, defaults, loaded);
 
-    if (typeof s.preset !== 'number' || s.preset < 0 || s.preset > 3) s.preset = defaults.preset;
-    if (typeof s.lightMode !== 'number' || s.lightMode < 0 || s.lightMode > 2) s.lightMode = defaults.lightMode;
+    if (typeof s.preset !== 'number' || s.preset < 0 || s.preset > 4) s.preset = defaults.preset;
+    if (typeof s.lightMode !== 'number' || s.lightMode < 0 || s.lightMode > 4) s.lightMode = defaults.lightMode;
     if (typeof s.flowSpeed !== 'number' || isNaN(s.flowSpeed) || s.flowSpeed < 0.1 || s.flowSpeed > 2.5) s.flowSpeed = defaults.flowSpeed;
     if (typeof s.dispersion !== 'number' || isNaN(s.dispersion) || s.dispersion < 0.0 || s.dispersion > 3.0) s.dispersion = defaults.dispersion;
     if (typeof s.grain !== 'number' || isNaN(s.grain) || s.grain < 0.1 || s.grain > 2.5) s.grain = defaults.grain;
@@ -784,12 +843,16 @@ class IridescentApp {
       bgWeights: [
         initialSettings.lightMode === 0 ? 1.0 : 0.0,
         initialSettings.lightMode === 1 ? 1.0 : 0.0,
-        initialSettings.lightMode === 2 ? 1.0 : 0.0
+        initialSettings.lightMode === 2 ? 1.0 : 0.0,
+        initialSettings.lightMode === 3 ? 1.0 : 0.0,
+        initialSettings.lightMode === 4 ? 1.0 : 0.0
       ],
       targetBgWeights: [
         initialSettings.lightMode === 0 ? 1.0 : 0.0,
         initialSettings.lightMode === 1 ? 1.0 : 0.0,
-        initialSettings.lightMode === 2 ? 1.0 : 0.0
+        initialSettings.lightMode === 2 ? 1.0 : 0.0,
+        initialSettings.lightMode === 3 ? 1.0 : 0.0,
+        initialSettings.lightMode === 4 ? 1.0 : 0.0
       ],
       isPaused: false,
       isUIVisible: true,
@@ -1088,6 +1151,7 @@ class IridescentApp {
     uniformNames.forEach((name) => {
       this.uniforms[name] = gl.getUniformLocation(program, name);
     });
+    this.uniforms.u_bg_weights = gl.getUniformLocation(program, 'u_bg_weights[0]') || gl.getUniformLocation(program, 'u_bg_weights');
     this.uniforms.u_ripples = gl.getUniformLocation(program, 'u_ripples[0]') || gl.getUniformLocation(program, 'u_ripples');
     this.uniforms.u_text_texture = gl.getUniformLocation(program, 'u_text_texture');
   }
@@ -1170,7 +1234,7 @@ class IridescentApp {
         this.capturePoster();
       } else if (e.key === 'Escape') {
         this.handleEscKey();
-      } else if (e.key >= '1' && e.key <= '4') {
+      } else if (e.key >= '1' && e.key <= '5') {
         this.setPreset(parseInt(e.key) - 1);
         this.saveSettings();
       }
@@ -1226,7 +1290,6 @@ class IridescentApp {
     }
 
     const togglePanelBtn = document.getElementById('toggle-panel-btn');
-    const closePanelBtn = document.getElementById('close-panel-btn');
     if (togglePanelBtn) {
       togglePanelBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1236,13 +1299,6 @@ class IridescentApp {
           this.updateBgIndicator(false);
           requestAnimationFrame(() => this.updateBgIndicator(false));
         }
-      });
-    }
-    if (closePanelBtn) {
-      closePanelBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.controlsPanel.classList.remove('open');
-        if (togglePanelBtn) togglePanelBtn.classList.remove('active');
       });
     }
 
@@ -1289,7 +1345,7 @@ class IridescentApp {
         btn.classList.add('active');
         const mode = parseInt(btn.dataset.mode);
         this.state.lightMode = mode;
-        this.state.targetBgWeights = [0.0, 0.0, 0.0];
+        this.state.targetBgWeights = [0.0, 0.0, 0.0, 0.0, 0.0];
         this.state.targetBgWeights[mode] = 1.0;
         this.updateThemeClass();
         this.updateBgIndicator(true);
@@ -1394,16 +1450,16 @@ class IridescentApp {
   applySettings(settings) {
     if (!settings || typeof settings !== 'object') return;
 
-    if (typeof settings.preset === 'number' && settings.preset >= 0 && settings.preset <= 3) {
+    if (typeof settings.preset === 'number' && settings.preset >= 0 && settings.preset <= 4) {
       this.state.presetFrom = this.state.preset;
       this.state.presetTo = settings.preset;
       this.state.preset = settings.preset;
       this.state.presetTransition = 0.0;
     }
 
-    if (typeof settings.lightMode === 'number' && settings.lightMode >= 0 && settings.lightMode <= 2) {
+    if (typeof settings.lightMode === 'number' && settings.lightMode >= 0 && settings.lightMode <= 4) {
       this.state.lightMode = settings.lightMode;
-      this.state.targetBgWeights = [0.0, 0.0, 0.0];
+      this.state.targetBgWeights = [0.0, 0.0, 0.0, 0.0, 0.0];
       this.state.targetBgWeights[settings.lightMode] = 1.0;
       this.updateThemeClass();
     }
@@ -1420,10 +1476,10 @@ class IridescentApp {
     const mode = Math.round(this.state.lightMode);
     if (mode === 2) {
       document.body.dataset.theme = 'paper';
-    } else if (mode === 1) {
-      document.body.dataset.theme = 'dark';
-    } else {
+    } else if (mode === 0) {
       document.body.dataset.theme = 'split';
+    } else {
+      document.body.dataset.theme = 'dark';
     }
   }
 
@@ -1441,7 +1497,7 @@ class IridescentApp {
 
     this.updatePresetIndicator(true);
 
-    const presetNames = ['珠光', '微塵', '流雲', '浮光'];
+    const presetNames = ['珠光', '微塵', '流雲', '浮光', '琉璃'];
     this.showToast(presetNames[index]);
   }
 
@@ -1700,7 +1756,7 @@ class IridescentApp {
 
     // 平滑背景底色過渡 (~0.7 秒絲滑切換)
     let themeChanged = false;
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 5; i++) {
       const prev = this.state.bgWeights[i];
       this.state.bgWeights[i] += (this.state.targetBgWeights[i] - this.state.bgWeights[i]) * Math.min(1.0, dt * 5.0);
       if (Math.abs(this.state.bgWeights[i] - prev) > 0.001) themeChanged = true;
@@ -1709,7 +1765,7 @@ class IridescentApp {
     // 根據 bgWeights 主導值動態切換 CSS theme（與 shader 同步）
     if (themeChanged) {
       const dominant = this.state.bgWeights.indexOf(Math.max(...this.state.bgWeights));
-      const themeMap = ['split', 'dark', 'paper'];
+      const themeMap = ['split', 'dark', 'paper', 'dark', 'dark'];
       const newTheme = themeMap[dominant];
       if (document.body.dataset.theme !== newTheme) {
         document.body.dataset.theme = newTheme;
@@ -1771,7 +1827,7 @@ class IridescentApp {
     if (this.uniforms.u_preset_from) gl.uniform1i(this.uniforms.u_preset_from, this.state.presetFrom);
     if (this.uniforms.u_preset_to) gl.uniform1i(this.uniforms.u_preset_to, this.state.presetTo);
     if (this.uniforms.u_preset_mix) gl.uniform1f(this.uniforms.u_preset_mix, this.state.presetTransition);
-    if (this.uniforms.u_bg_weights) gl.uniform3fv(this.uniforms.u_bg_weights, this.state.bgWeights);
+    if (this.uniforms.u_bg_weights) gl.uniform1fv(this.uniforms.u_bg_weights, this.state.bgWeights);
     gl.uniform1f(this.uniforms.u_flow_speed, this.state.flowSpeed);
     gl.uniform1f(this.uniforms.u_dispersion, this.state.dispersion);
     gl.uniform1f(this.uniforms.u_grain, this.state.grain);
