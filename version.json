@@ -1,5 +1,5 @@
 {
-  "version": "1.2.1",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.1/RainbowFlow.zip",
-  "notes": "修正快速退出重開、多螢幕變更與載入恢復；退出後釋放 WebView；新增原生海報儲存及更新驗證、備份與失敗回復。維持原有高畫質，網頁視覺與互動不變。"
+  "version": "1.2.2",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.2/RainbowFlow.zip",
+  "notes": "修正 macOS 26 控制中心選單列圖示顯示與幽靈選單問題；升級獨立識別碼與單一實例清理。"
 }
