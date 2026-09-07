@@ -286,7 +286,10 @@ html, body {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
-  transition: opacity 0.35s ease, visibility 0.35s ease;
+  transform: translateY(28px) scale(0.92) !important;
+  transition: opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              visibility 0.28s !important;
 }
 
 .bottom-dock.mode-hide-buttons #hide-buttons-btn {
@@ -321,7 +324,10 @@ html, body {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
-  transition: opacity 0.35s ease, visibility 0.35s ease;
+  transform: translateY(28px) scale(0.92) !important;
+  transition: opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              visibility 0.28s !important;
 }
 
 .bottom-dock.mode-hide-all #hide-all-btn {
@@ -345,6 +351,49 @@ html, body {
   right: -22px;
   border-radius: 50%;
   pointer-events: auto;
+}
+
+/* 退出專注與全螢幕模式時的絲滑彈出動畫 (Silky Pop-up Spring Animation) */
+.bottom-dock.dock-spring-in .preset-switcher {
+  animation: dockSpringUp 0.62s cubic-bezier(0.34, 1.36, 0.64, 1) both;
+}
+
+.bottom-dock.dock-spring-in .dock-actions > *:nth-child(1) {
+  animation: dockSpringUp 0.56s cubic-bezier(0.34, 1.36, 0.64, 1) 0.04s both;
+}
+
+.bottom-dock.dock-spring-in .dock-actions > *:nth-child(2) {
+  animation: dockSpringUp 0.56s cubic-bezier(0.34, 1.36, 0.64, 1) 0.08s both;
+}
+
+.bottom-dock.dock-spring-in .dock-actions > *:nth-child(3) {
+  animation: dockSpringUp 0.56s cubic-bezier(0.34, 1.36, 0.64, 1) 0.12s both;
+}
+
+.bottom-dock.dock-spring-in .dock-actions > *:nth-child(4) {
+  animation: dockSpringUp 0.56s cubic-bezier(0.34, 1.36, 0.64, 1) 0.16s both;
+}
+
+.bottom-dock.dock-spring-in .dock-actions > *:nth-child(5) {
+  animation: dockSpringUp 0.56s cubic-bezier(0.34, 1.36, 0.64, 1) 0.20s both;
+}
+
+@keyframes dockSpringUp {
+  0% {
+    opacity: 0;
+    transform: translateY(32px) scale(0.92);
+  }
+  62% {
+    opacity: 1;
+    transform: translateY(-5px) scale(1.025);
+  }
+  84% {
+    transform: translateY(1.5px) scale(0.995);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* 模式選擇膠囊容器 (100% Colorless Frosted Glass with Overlapping Chromatic Dispersion) */
