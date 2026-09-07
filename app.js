@@ -672,33 +672,115 @@ const soundEngine = new AmbientAudioEngine();
 // 3. WebGL 控制器與互動邏輯
 // ============================================================================
 class IridescentApp {
+  getDefaultSettings() {
+    return {
+      preset: 0,
+      lightMode: 0,
+      flowSpeed: 0.60,
+      dispersion: 1.20,
+      grain: 0.60,
+      cursorInfluence: 0.10
+    };
+  }
+
+  loadSettings() {
+    let loaded = null;
+    if (window.__INITIAL_SETTINGS__ && typeof window.__INITIAL_SETTINGS__ === 'object') {
+      loaded = window.__INITIAL_SETTINGS__;
+    } else {
+      try {
+        const raw = localStorage.getItem('rainbowflow_user_settings');
+        if (raw) loaded = JSON.parse(raw);
+      } catch (e) {}
+    }
+
+    const defaults = this.getDefaultSettings();
+    const s = Object.assign({}, defaults, loaded);
+
+    if (typeof s.preset !== 'number' || s.preset < 0 || s.preset > 3) s.preset = defaults.preset;
+    if (typeof s.lightMode !== 'number' || s.lightMode < 0 || s.lightMode > 2) s.lightMode = defaults.lightMode;
+    if (typeof s.flowSpeed !== 'number' || isNaN(s.flowSpeed) || s.flowSpeed < 0.1 || s.flowSpeed > 2.5) s.flowSpeed = defaults.flowSpeed;
+    if (typeof s.dispersion !== 'number' || isNaN(s.dispersion) || s.dispersion < 0.0 || s.dispersion > 3.0) s.dispersion = defaults.dispersion;
+    if (typeof s.grain !== 'number' || isNaN(s.grain) || s.grain < 0.1 || s.grain > 2.5) s.grain = defaults.grain;
+    if (typeof s.cursorInfluence !== 'number' || isNaN(s.cursorInfluence) || s.cursorInfluence < 0.0 || s.cursorInfluence > 5.0) s.cursorInfluence = defaults.cursorInfluence;
+
+    return s;
+  }
+
+  saveSettings() {
+    if (this._saveSettingsTimer) {
+      clearTimeout(this._saveSettingsTimer);
+      this._saveSettingsTimer = null;
+    }
+    const current = {
+      preset: this.state.preset,
+      lightMode: this.state.lightMode,
+      flowSpeed: this.state.flowSpeed,
+      dispersion: this.state.dispersion,
+      grain: this.state.grain,
+      cursorInfluence: this.state.cursorInfluence
+    };
+
+    // 1. 瀏覽器端 LocalStorage 保存
+    try {
+      localStorage.setItem('rainbowflow_user_settings', JSON.stringify(current));
+    } catch (e) {}
+
+    // 2. 原生 macOS 端 UserDefaults 保存
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.macApp) {
+      window.webkit.messageHandlers.macApp.postMessage({
+        action: 'saveSettings',
+        settings: current
+      });
+    }
+  }
+
+  queueSaveSettings() {
+    if (this._saveSettingsTimer) clearTimeout(this._saveSettingsTimer);
+    this._saveSettingsTimer = setTimeout(() => {
+      this.saveSettings();
+    }, 150);
+  }
+
   constructor() {
     this.canvas = document.getElementById('gl-canvas');
     this.gl = null;
     this.program = null;
     this.uniforms = {};
 
+    const initialSettings = this.loadSettings();
+
     this.state = {
-      preset: 0,
-      presetFrom: 0,
-      presetTo: 0,
+      preset: initialSettings.preset,
+      presetFrom: initialSettings.preset,
+      presetTo: initialSettings.preset,
       presetTransition: 1.0,
-      flowSpeed: 0.60,
-      dispersion: 1.20,
-      grain: 0.60,
+      flowSpeed: initialSettings.flowSpeed,
+      dispersion: initialSettings.dispersion,
+      grain: initialSettings.grain,
       halftoneScale: 0.50,
       vortexPower: 0.0,
-      cursorInfluence: 0.1,
+      cursorInfluence: initialSettings.cursorInfluence,
       defocus: 0.30,
       contrast: 1.15,
-      lightMode: 0.0, // 水墨
-      bgWeights: [1.0, 0.0, 0.0], // mode 0, 1, 2
-      targetBgWeights: [1.0, 0.0, 0.0],
+      lightMode: initialSettings.lightMode,
+      bgWeights: [
+        initialSettings.lightMode === 0 ? 1.0 : 0.0,
+        initialSettings.lightMode === 1 ? 1.0 : 0.0,
+        initialSettings.lightMode === 2 ? 1.0 : 0.0
+      ],
+      targetBgWeights: [
+        initialSettings.lightMode === 0 ? 1.0 : 0.0,
+        initialSettings.lightMode === 1 ? 1.0 : 0.0,
+        initialSettings.lightMode === 2 ? 1.0 : 0.0
+      ],
       isPaused: false,
       isUIVisible: true,
       viewMode: 'normal', // 'normal' | 'hide_buttons' | 'hide_all'
       hideTimer: null
     };
+
+    this.updateThemeClass();
 
     this.startTime = performance.now();
     this.time = 0;
@@ -715,8 +797,6 @@ class IridescentApp {
       pressPower: 0
     };
 
-    this.cursorDot = document.querySelector('.cursor-dot');
-    this.cursorRing = document.querySelector('.cursor-ring');
     this.inversionLayer = document.querySelector('.inversion-text-layer');
     this.controlsLayer = document.querySelector('.controls-layer');
     this.controlsPanel = document.getElementById('controls-panel');
@@ -738,7 +818,40 @@ class IridescentApp {
     this.textCtx = null;
     this.textTexture = null;
 
+    // 螢幕主從角色與外接螢幕設定 (預設為副螢幕延伸: 主螢幕文字，副螢幕純淨)
+    const screenInfo = window.__SCREEN_INFO__ || { isMain: true, mode: 'secondary_extend' };
+    this.screenRole = { isMain: screenInfo.isMain, mode: screenInfo.mode };
+    if (!this.shouldDisplayText(this.screenRole.isMain, this.screenRole.mode)) {
+      document.body.classList.add('satellite-screen');
+    }
+
     this.init();
+  }
+
+  shouldDisplayText(isMain, mode) {
+    switch (mode) {
+      case 'secondary_extend': // 1. 副螢幕延伸 (主螢幕文字，副螢幕純淨)
+        return isMain;
+      case 'primary_extend':   // 2. 主螢幕延伸 (副螢幕文字，主螢幕純淨)
+        return !isMain;
+      case 'all_pure':         // 3. 雙螢幕純淨 (兩者皆純淨無文字)
+        return false;
+      case 'all_text':         // 4. 雙螢幕文字顯示 (兩者皆有文字)
+        return true;
+      default:
+        return isMain;
+    }
+  }
+
+  updateScreenRole(isMain, mode) {
+    this.screenRole = { isMain, mode };
+    const hasText = this.shouldDisplayText(isMain, mode);
+    if (!hasText) {
+      document.body.classList.add('satellite-screen');
+    } else {
+      document.body.classList.remove('satellite-screen');
+    }
+    this.renderTextTexture();
   }
 
   addRipple(clientX, clientY) {
@@ -781,7 +894,7 @@ class IridescentApp {
 
   uploadTextTexture() {
     const gl = this.gl;
-    if (!gl || !this.textCanvas) return;
+    if (!gl || !this.textCanvas || this.textCanvas.width === 0 || this.textCanvas.height === 0) return;
 
     if (!this.textTexture) {
       this.textTexture = gl.createTexture();
@@ -813,7 +926,11 @@ class IridescentApp {
     const ctx = this.textCtx;
     ctx.clearRect(0, 0, this.textCanvas.width, this.textCanvas.height);
 
-    if (!this.state.isUIVisible || this.state.viewMode === 'hide_all') {
+    const isMain = this.screenRole ? this.screenRole.isMain : true;
+    const mode = this.screenRole ? this.screenRole.mode : 'secondary_extend';
+    const hasText = this.shouldDisplayText(isMain, mode);
+
+    if (!hasText || !this.state.isUIVisible || this.state.viewMode === 'hide_all') {
       this.uploadTextTexture();
       return;
     }
@@ -822,8 +939,9 @@ class IridescentApp {
     ctx.scale(dpr, dpr);
 
     const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const serifFont = "'Noto Serif TC', 'Noto Serif SC', 'Songti SC', 'STSong', 'PMingLiU', serif";
 
-    // 1. 品牌主標題 (GRAND MODERN CHINA) - Y軸置中
+    // 1. 品牌主標題 (GRAND MODERN CHINA)
     const isMobile = width <= 900;
     const leftX = isMobile ? 1.5 * rem : 3.5 * rem;
     const brandMainSize = (isMobile ? 1.1 : 1.35) * rem;
@@ -839,7 +957,6 @@ class IridescentApp {
     this.drawSpacedText(ctx, 'GRAND MODERN CHINA', leftX, topY, 0.48 * brandMainSize);
 
     // 次標題 (月刊手藝 · 寫新故事 · HOLOGRAPHIC ARCHIVE) - 與右側詩詞統一使用高雅宋體/明體襯線字型
-    const serifFont = "'Noto Serif TC', 'Noto Serif SC', 'Songti SC', 'STSong', 'PMingLiU', serif";
     const subY = topY + brandMainSize * 1.55;
     ctx.font = `400 ${subSize}px ${serifFont}`;
     this.drawSpacedText(ctx, '月刊手藝  ·  寫新故事  ·  HOLOGRAPHIC ARCHIVE', leftX, subY, 0.35 * subSize);
@@ -859,12 +976,25 @@ class IridescentApp {
     // 行 2: 方寸微塵相生
     this.drawVerticalText(ctx, '方寸微塵相生', rightX - colGap, poemTopY, poemCharStep);
 
-    // 英文年份標註
+    // 精準計算中文首字實際頂部墨跡基準線，確保旋轉後的英文直排頂部與中文首字頂部切齊
+    const cjkMetrics = ctx.measureText('虹');
+    const cjkInkTopOffset = (cjkMetrics && typeof cjkMetrics.actualBoundingBoxAscent === 'number')
+      ? -cjkMetrics.actualBoundingBoxAscent
+      : (0.27 * poemFontSize);
+
+    // 英文年份標註（加計 0.125 * poemFontSize 視覺光學補償，確保 P 頂端與中文橫筆/點首字在像素級完全切齊）
     const annotSize = 0.65 * rem;
     ctx.font = `300 ${annotSize}px monospace`;
+    const pMetrics = ctx.measureText('P');
+    const pLeftOffset = (pMetrics && typeof pMetrics.actualBoundingBoxLeft === 'number')
+      ? pMetrics.actualBoundingBoxLeft
+      : 0;
+    const opticalOffset = 0.125 * poemFontSize;
+    const annotTopY = poemTopY + cjkInkTopOffset - pLeftOffset + opticalOffset;
+
     ctx.textAlign = 'left';
     ctx.save();
-    ctx.translate(rightX - colGap * 1.8, poemTopY);
+    ctx.translate(rightX - colGap * 1.8, annotTopY);
     ctx.rotate(Math.PI * 0.5);
     this.drawSpacedText(ctx, 'PRISM // 2026', 0, 0, 0.25 * annotSize);
     ctx.restore();
@@ -970,13 +1100,6 @@ class IridescentApp {
       const rect = this.canvas.getBoundingClientRect();
       this.mouse.targetX = (clientX - rect.left) / rect.width;
       this.mouse.targetY = 1.0 - (clientY - rect.top) / rect.height;
-
-      if (this.cursorDot && this.cursorRing) {
-        this.cursorDot.style.left = `${clientX}px`;
-        this.cursorDot.style.top = `${clientY}px`;
-        this.cursorRing.style.left = `${clientX}px`;
-        this.cursorRing.style.top = `${clientY}px`;
-      }
     };
 
     window.addEventListener('mousemove', (e) => {
@@ -1034,29 +1157,35 @@ class IridescentApp {
       } else if (e.key === 's' || e.key === 'S') {
         this.capturePoster();
       } else if (e.key === 'Escape') {
-        // 1. 若控制抽屜開啟，先關閉抽屜
-        if (this.controlsPanel && this.controlsPanel.classList.contains('open')) {
-          this.controlsPanel.classList.remove('open');
-          const togglePanelBtn = document.getElementById('toggle-panel-btn');
-          if (togglePanelBtn) togglePanelBtn.classList.remove('active');
-          return;
-        }
-
-        // 2. 若處於專注模式或全螢幕模式，按第一次 Esc 回到調整介面
-        if (this.state.viewMode !== 'normal') {
-          this.setViewMode('normal');
-          this.showToast('介面已恢復');
-          return;
-        }
-
-        // 3. 若已在調整介面，再次按 Esc 則是退出螢幕保護程式
-        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.macApp) {
-          window.webkit.messageHandlers.macApp.postMessage({ action: 'exitScreensaver' });
-        }
+        this.handleEscKey();
       } else if (e.key >= '1' && e.key <= '4') {
         this.setPreset(parseInt(e.key) - 1);
+        this.saveSettings();
       }
     });
+  }
+
+  handleEscKey() {
+    // 1. 若控制抽屜開啟，先關閉抽屜
+    if (this.controlsPanel && this.controlsPanel.classList.contains('open')) {
+      this.controlsPanel.classList.remove('open');
+      const togglePanelBtn = document.getElementById('toggle-panel-btn');
+      if (togglePanelBtn) togglePanelBtn.classList.remove('active');
+      return;
+    }
+
+    // 2. 若處於專注模式或全螢幕模式，按第一次 Esc 回到調整介面
+    if (this.state.viewMode !== 'normal') {
+      document.body.classList.remove('satellite-screen');
+      this.setViewMode('normal');
+      this.showToast('介面已恢復');
+      return;
+    }
+
+    // 3. 若已在調整介面，再次按 Esc 則是退出螢幕保護程式
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.macApp) {
+      window.webkit.messageHandlers.macApp.postMessage({ action: 'exitScreensaver' });
+    }
   }
 
   setupUI() {
@@ -1065,6 +1194,7 @@ class IridescentApp {
       btn.addEventListener('click', () => {
         const p = parseInt(btn.dataset.preset);
         this.setPreset(p);
+        this.saveSettings();
       });
     });
 
@@ -1130,6 +1260,7 @@ class IridescentApp {
           const val = parseFloat(e.target.value) * multiplier;
           this.state[stateKey] = val;
           if (displayEl) displayEl.innerText = val.toFixed(decimal);
+          this.queueSaveSettings();
         });
       }
     };
@@ -1151,6 +1282,7 @@ class IridescentApp {
         this.updateThemeClass();
         this.updateBgIndicator(true);
         this.showToast(btn.innerText);
+        this.saveSettings();
       });
     });
 
@@ -1195,13 +1327,9 @@ class IridescentApp {
 
     this.setupDockHover();
 
-    this.updateThemeClass();
+    // 將載入的使用者設定同步至介面控制項
+    this.syncUIFromState();
 
-    // 啟動後平滑初始化膠囊指示器位置
-    requestAnimationFrame(() => {
-      this.updatePresetIndicator(false);
-      this.updateBgIndicator(false);
-    });
     window.addEventListener('resize', () => {
       this.updatePresetIndicator(false);
       this.updateBgIndicator(false);
@@ -1212,6 +1340,68 @@ class IridescentApp {
         this.updateBgIndicator(false);
       });
     }
+  }
+
+  syncUIFromState() {
+    // 1. 同步風格預設按鈕
+    const presetBtns = document.querySelectorAll('.preset-btn');
+    presetBtns.forEach((b) => {
+      b.classList.toggle('active', parseInt(b.dataset.preset) === this.state.preset);
+    });
+
+    // 2. 同步底色模式按鈕與主題
+    const bgBtns = document.querySelectorAll('.bg-btn');
+    bgBtns.forEach((b) => {
+      b.classList.toggle('active', parseInt(b.dataset.mode) === Math.round(this.state.lightMode));
+    });
+    this.updateThemeClass();
+
+    // 3. 同步各滑桿數值與對應的數字顯示
+    const setSliderVal = (id, valDisplayId, val, decimal = 1) => {
+      const el = document.getElementById(id);
+      const displayEl = document.getElementById(valDisplayId);
+      if (el && typeof val === 'number') {
+        el.value = val;
+      }
+      if (displayEl && typeof val === 'number') {
+        displayEl.innerText = val.toFixed(decimal);
+      }
+    };
+    setSliderVal('slider-speed', 'val-speed', this.state.flowSpeed, 1);
+    setSliderVal('slider-dispersion', 'val-dispersion', this.state.dispersion, 1);
+    setSliderVal('slider-grain', 'val-grain', this.state.grain, 1);
+    setSliderVal('slider-cursor', 'val-cursor', this.state.cursorInfluence, 1);
+
+    // 4. 重整膠囊指示器位置
+    requestAnimationFrame(() => {
+      this.updatePresetIndicator(false);
+      this.updateBgIndicator(false);
+    });
+  }
+
+  applySettings(settings) {
+    if (!settings || typeof settings !== 'object') return;
+
+    if (typeof settings.preset === 'number' && settings.preset >= 0 && settings.preset <= 3) {
+      this.state.presetFrom = this.state.preset;
+      this.state.presetTo = settings.preset;
+      this.state.preset = settings.preset;
+      this.state.presetTransition = 0.0;
+    }
+
+    if (typeof settings.lightMode === 'number' && settings.lightMode >= 0 && settings.lightMode <= 2) {
+      this.state.lightMode = settings.lightMode;
+      this.state.targetBgWeights = [0.0, 0.0, 0.0];
+      this.state.targetBgWeights[settings.lightMode] = 1.0;
+      this.updateThemeClass();
+    }
+
+    if (typeof settings.flowSpeed === 'number') this.state.flowSpeed = settings.flowSpeed;
+    if (typeof settings.dispersion === 'number') this.state.dispersion = settings.dispersion;
+    if (typeof settings.grain === 'number') this.state.grain = settings.grain;
+    if (typeof settings.cursorInfluence === 'number') this.state.cursorInfluence = settings.cursorInfluence;
+
+    this.syncUIFromState();
   }
 
   updateThemeClass() {
@@ -1299,7 +1489,7 @@ class IridescentApp {
     }
   }
 
-  setViewMode(mode) {
+  setViewMode(mode, silent = false) {
     if (this.state.hideTimer) {
       clearTimeout(this.state.hideTimer);
       this.state.hideTimer = null;
@@ -1333,7 +1523,9 @@ class IridescentApp {
         if (togglePanelBtn) togglePanelBtn.classList.remove('active');
       }
       this.renderTextTexture();
-      this.showToast('專注模式 (游標移至右下角恢復，或按 Esc)');
+      if (!silent) {
+        this.showToast('專注模式（ESC恢復）');
+      }
     } else if (mode === 'hide_all') {
       if (this.controlsPanel) {
         this.controlsPanel.classList.remove('open');
@@ -1341,7 +1533,9 @@ class IridescentApp {
         if (togglePanelBtn) togglePanelBtn.classList.remove('active');
       }
       this.renderTextTexture();
-      this.showToast('純淨全景 (游標移至右下角恢復，或按 Esc)');
+      if (!silent) {
+        this.showToast('全螢幕模式（ESC恢復）');
+      }
     }
   }
 
@@ -1386,8 +1580,8 @@ class IridescentApp {
     this.setViewMode('hide_all');
   }
 
-  togglePause() {
-    this.state.isPaused = !this.state.isPaused;
+  setPaused(paused) {
+    this.state.isPaused = !!paused;
     const pauseBtn = document.getElementById('pause-btn');
     if (pauseBtn) {
       pauseBtn.classList.toggle('active', this.state.isPaused);
@@ -1401,6 +1595,10 @@ class IridescentApp {
       this.mouse.isDown = false;
       document.body.classList.remove('interacting');
     }
+  }
+
+  togglePause() {
+    this.setPaused(!this.state.isPaused);
     this.showToast(this.state.isPaused ? '流動已定格' : '流動已恢復');
   }
 
@@ -1567,18 +1765,27 @@ window.addEventListener('DOMContentLoaded', () => {
   window.appInstance = new IridescentApp();
   window.rainbowApp = {
     pause: () => {
-      if (window.appInstance && !window.appInstance.state.isPaused) {
-        window.appInstance.togglePause();
+      if (window.appInstance) {
+        window.appInstance.setPaused(true);
       }
     },
     resume: () => {
-      if (window.appInstance && window.appInstance.state.isPaused) {
-        window.appInstance.togglePause();
+      if (window.appInstance) {
+        window.appInstance.setPaused(false);
       }
     },
-    setScreensaverMode: () => {
+    setScreensaverMode: (isMain = true, mode = 'secondary_extend') => {
       if (window.appInstance) {
-        window.appInstance.setViewMode('hide_all');
+        window.appInstance.updateScreenRole(isMain, mode);
+        const hasText = window.appInstance.shouldDisplayText(isMain, mode);
+        window.appInstance.setViewMode(hasText ? 'hide_buttons' : 'hide_all', true);
+      }
+    },
+    updateScreenRole: (isMain = true, mode = 'secondary_extend') => {
+      if (window.appInstance) {
+        window.appInstance.updateScreenRole(isMain, mode);
+        const hasText = window.appInstance.shouldDisplayText(isMain, mode);
+        window.appInstance.setViewMode(hasText ? 'hide_buttons' : 'hide_all', true);
       }
     },
     setNormalMode: () => {

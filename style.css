@@ -118,50 +118,6 @@ html, body {
   display: block;
 }
 
-/* ==========================================================================
-   自定義游標跟隨器 (Custom Cursor)
-   ========================================================================== */
-.cursor-dot {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 8px;
-  height: 8px;
-  background-color: #ffffff;
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 999;
-  transform: translate(-50%, -50%);
-  transition: transform 0.08s ease-out, background-color 0.2s ease;
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
-}
-
-.cursor-ring {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 42px;
-  height: 42px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 998;
-  transform: translate(-50%, -50%);
-  transition: width 0.25s ease, height 0.25s ease, border-color 0.25s ease;
-  backdrop-filter: blur(1px);
-}
-
-body.interacting .cursor-ring {
-  width: 68px;
-  height: 68px;
-  border-color: rgba(147, 197, 253, 0.8);
-  box-shadow: 0 0 20px rgba(167, 139, 250, 0.4);
-}
-
-body.cursor-over-ui .cursor-ring {
-  opacity: 0.25;
-  transform: translate(-50%, -50%) scale(0.65);
-}
 
 /* ==========================================================================
    1. 動態反白文字層 (Dynamic Inversion Text Layer)
@@ -250,6 +206,7 @@ body.cursor-over-ui .cursor-ring {
   color: #ffffff;
   font-family: monospace;
   opacity: 0.75;
+  margin-top: 0.49rem;
 }
 
 /* ==========================================================================
@@ -901,7 +858,7 @@ body[data-theme="dark"] .bg-btn.active {
    ========================================================================== */
 .toast {
   position: fixed;
-  top: 2rem;
+  top: calc(2rem + 1vh);
   left: 50%;
   transform: translateX(-50%) translateY(-20px);
   border: 1px solid var(--glass-border-color);
@@ -972,3 +929,14 @@ body[data-theme="dark"] .bg-btn.active {
     transform: translateY(0) scale(1);
   }
 }
+
+/* ==========================================================================
+   外接副螢幕模式 (Satellite Screen / External Display)
+   副螢幕隱藏底部操作欄、抽屜面板與提示，呈現極致純淨的延伸氛圍
+   ========================================================================== */
+body.satellite-screen .bottom-dock,
+body.satellite-screen .controls-panel,
+body.satellite-screen .toast {
+  display: none !important;
+}
+
