@@ -24,7 +24,7 @@ const fragmentShaderSource = `
   uniform float u_time;
   uniform vec2 u_mouse;
   uniform vec2 u_mouse_vel;
-  uniform vec4 u_ripples[4];
+  uniform vec4 u_ripples[10];
   uniform sampler2D u_text_texture;
 
   // 控制參數
@@ -355,12 +355,13 @@ const fragmentShaderSource = `
 
     // ----------------------------------------------------------------------
     // 有機流體自然漫射水波系統 (Organic Viscous Liquid Ripple Propagation)
-    // 悠緩自然、具備流體黏滯阻尼與流場微擾，破除幾何同心圓死板公式感
+    // 悠緩自然、具備流體黏滯阻尼與立體光影，呈現晶瑩立體的真實水面起伏
     // ----------------------------------------------------------------------
     vec2 rippleDisplace = vec2(0.0);
     float rippleShimmer = 0.0;
+    const vec2 ripLightDir = vec2(-0.5547, 0.8320); // 來自左上方的自然環境主光源方向
 
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 10; i++) {
       float birthTime = u_ripples[i].z;
       float age = u_time - birthTime;
 
@@ -376,18 +377,31 @@ const fragmentShaderSource = `
         // 悠緩溫潤的傳播速度 (約 4.2 秒緩慢舒展漫遊)
         float waveSpeed = 0.28;
         float waveRadius = age * waveSpeed;
-        float deltaDist = organicDist - waveRadius;
-
-        // 柔和寬闊的高斯波包：隨時間更寬柔地舒展
-        float packetWidth = 0.085 + age * 0.052;
-        float envelope = exp(-pow(deltaDist / packetWidth, 2.0) * 2.8);
+        float deltaDist1 = organicDist - waveRadius;
 
         // 因果性平滑過渡：波前未受擾動水面維持靜謐
-        float causality = smoothstep(0.04, -0.04, deltaDist);
+        float causality = smoothstep(0.04, -0.04, deltaDist1);
 
-        // 悠緩大氣的多頻複合波 (波頻 21.0，波紋舒展大氣，如同水滴落入靜水)
-        float wavePhase = deltaDist * 21.0;
-        float wave = (sin(wavePhase) + 0.35 * sin(wavePhase * 1.55 - 0.75)) * envelope * causality;
+        // 1. 第一道主波 (Outer Primary Crest)
+        float packetWidth1 = 0.078 + age * 0.045;
+        float env1 = exp(-pow(deltaDist1 / packetWidth1, 2.0) * 3.5) * causality;
+        float phase1 = deltaDist1 * 26.0;
+        float wave1 = (cos(phase1) + 0.22 * cos(phase1 * 2.0)) * env1;
+        float slope1 = -sin(phase1) * env1;
+
+        // 2. 第二道次波 (Inner Secondary Rebound Crest - 隨中心反彈水柱自然激發)
+        float waveSpacing = 0.096 + age * 0.022; // 隨擴散自然微幅展開的雙波間距
+        float deltaDist2 = deltaDist1 + waveSpacing;
+        float wave2Birth = smoothstep(0.12, 0.40, age); // 撞擊後約 0.12~0.4 秒自然回彈湧現
+        float packetWidth2 = 0.082 + age * 0.048;
+        float env2 = exp(-pow(deltaDist2 / packetWidth2, 2.0) * 3.5) * wave2Birth;
+        float phase2 = deltaDist2 * 26.0;
+        float wave2 = (cos(phase2) + 0.22 * cos(phase2 * 2.0)) * env2 * 0.65;
+        float slope2 = -sin(phase2) * env2 * 0.65;
+
+        // 雙波複合總波幅與法線斜率
+        float wave = wave1 + wave2;
+        float totalSlope = slope1 + slope2;
 
         // 雙重物理黏滯消散：
         // 1. 雙曲阻尼與長效平滑衰減 (初期舒緩起伏，悠長漫延後自然化入虛無)
@@ -397,13 +411,16 @@ const fragmentShaderSource = `
 
         float amp = wave * timeFade * geoFade * u_ripples[i].w;
 
-        // 純物理徑向推移：點擊時嚴格沿著半徑向外推移，絕無任何旋轉或切向扭曲
+        // 純物理徑向推移：微幅強化透鏡折射深度
         vec2 dir = (dist > 0.0005) ? (deltaP / dist) : vec2(0.0);
-        rippleDisplace -= dir * (amp * 0.026);
+        rippleDisplace -= dir * (amp * 0.034);
 
-        // 波面斜率透鏡折射光影 (柔潤水光高光)
-        float slope = cos(wavePhase) * envelope * causality * timeFade * geoFade * u_ripples[i].w;
-        rippleShimmer += slope * 0.13;
+        // 雙重波紋立體光影（法線受光＋柔潤水光高光）
+        float slope = totalSlope * timeFade * geoFade * u_ripples[i].w;
+        float lightDot = dot(dir, ripLightDir);
+        float shade3D = slope * (0.08 + lightDot * 0.12);
+        float specular = pow(max(0.0, lightDot * 0.5 + 0.5), 3.0) * max(0.0, slope) * 0.11;
+        rippleShimmer += shade3D + specular;
       }
     }
 
@@ -803,15 +820,10 @@ class IridescentApp {
     this.toast = document.getElementById('toast');
     this.soundBtn = document.getElementById('sound-btn');
 
-    // 物理擴散水波漣漪隊列 (最多支援 4 組重疊干涉漣漪)
-    this.ripples = [
-      { x: 0.5, y: 0.5, time: -100.0, strength: 0.0 },
-      { x: 0.5, y: 0.5, time: -100.0, strength: 0.0 },
-      { x: 0.5, y: 0.5, time: -100.0, strength: 0.0 },
-      { x: 0.5, y: 0.5, time: -100.0, strength: 0.0 }
-    ];
+    // 物理擴散水波漣漪隊列 (最多支援 10 組重疊干涉漣漪)
+    this.ripples = Array.from({ length: 10 }, () => ({ x: 0.5, y: 0.5, time: -100.0, strength: 0.0 }));
     this.rippleIndex = 0;
-    this.rippleData = new Float32Array(16);
+    this.rippleData = new Float32Array(40);
 
     // 純黑白動態反白文字紋理系統
     this.textCanvas = null;
@@ -1737,7 +1749,7 @@ class IridescentApp {
     gl.uniform2f(this.uniforms.u_mouse_vel, this.mouse.vx, this.mouse.vy);
 
     // 物理擴散水波漣漪數據上載
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 10; i++) {
       const r = this.ripples[i];
       this.rippleData[i * 4 + 0] = r.x;
       this.rippleData[i * 4 + 1] = r.y;
