@@ -286,10 +286,10 @@ html, body {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
-  transform: translateY(28px) scale(0.92) !important;
-  transition: opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-              transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-              visibility 0.28s !important;
+  transform: translateY(22px) !important;
+  transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              visibility 0.25s !important;
 }
 
 .bottom-dock.mode-hide-buttons #hide-buttons-btn {
@@ -324,10 +324,10 @@ html, body {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
-  transform: translateY(28px) scale(0.92) !important;
-  transition: opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-              transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-              visibility 0.28s !important;
+  transform: translateY(22px) !important;
+  transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              visibility 0.25s !important;
 }
 
 .bottom-dock.mode-hide-all #hide-all-btn {
@@ -353,46 +353,39 @@ html, body {
   pointer-events: auto;
 }
 
-/* 退出專注與全螢幕模式時的絲滑彈出動畫 (Silky Pop-up Spring Animation) */
+/* 退出專注與全螢幕模式時的無回彈絲滑滑出動畫 (Silky Smooth Zero-Bounce Slide-Up) */
 .bottom-dock.dock-spring-in .preset-switcher {
-  animation: dockSpringUp 0.62s cubic-bezier(0.34, 1.36, 0.64, 1) both;
+  animation: dockSlideUp 0.46s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .bottom-dock.dock-spring-in .dock-actions > *:nth-child(1) {
-  animation: dockSpringUp 0.56s cubic-bezier(0.34, 1.36, 0.64, 1) 0.04s both;
+  animation: dockSlideUp 0.42s cubic-bezier(0.16, 1, 0.3, 1) 0.02s both;
 }
 
 .bottom-dock.dock-spring-in .dock-actions > *:nth-child(2) {
-  animation: dockSpringUp 0.56s cubic-bezier(0.34, 1.36, 0.64, 1) 0.08s both;
+  animation: dockSlideUp 0.42s cubic-bezier(0.16, 1, 0.3, 1) 0.04s both;
 }
 
 .bottom-dock.dock-spring-in .dock-actions > *:nth-child(3) {
-  animation: dockSpringUp 0.56s cubic-bezier(0.34, 1.36, 0.64, 1) 0.12s both;
+  animation: dockSlideUp 0.42s cubic-bezier(0.16, 1, 0.3, 1) 0.06s both;
 }
 
 .bottom-dock.dock-spring-in .dock-actions > *:nth-child(4) {
-  animation: dockSpringUp 0.56s cubic-bezier(0.34, 1.36, 0.64, 1) 0.16s both;
+  animation: dockSlideUp 0.42s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both;
 }
 
 .bottom-dock.dock-spring-in .dock-actions > *:nth-child(5) {
-  animation: dockSpringUp 0.56s cubic-bezier(0.34, 1.36, 0.64, 1) 0.20s both;
+  animation: dockSlideUp 0.42s cubic-bezier(0.16, 1, 0.3, 1) 0.10s both;
 }
 
-@keyframes dockSpringUp {
+@keyframes dockSlideUp {
   0% {
     opacity: 0;
-    transform: translateY(32px) scale(0.92);
-  }
-  62% {
-    opacity: 1;
-    transform: translateY(-5px) scale(1.025);
-  }
-  84% {
-    transform: translateY(1.5px) scale(0.995);
+    transform: translateY(22px);
   }
   100% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
