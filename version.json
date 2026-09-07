@@ -1,5 +1,5 @@
 {
-  "version": "1.2.0",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow/releases/download/v1.2.0/RainbowFlow.zip",
-  "notes": "新增外接雙螢幕四大多螢幕顯示模式、兩段階梯式 Esc 介面恢復與退出機制、螢幕保護啟動與黑幕底色優化。"
+  "version": "1.2.1",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow/releases/download/v1.2.1/RainbowFlow.zip",
+  "notes": "修正快速退出重開、多螢幕變更與載入恢復；退出後釋放 WebView；新增原生海報儲存及更新驗證、備份與失敗回復。維持原有高畫質，網頁視覺與互動不變。"
 }
