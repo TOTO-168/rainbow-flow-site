@@ -29,7 +29,7 @@ export const fragmentShaderSource = `
   uniform int u_preset_from;     // 過渡來源風格
   uniform int u_preset_to;       // 過渡目標風格
   uniform float u_preset_mix;    // 0.0 ~ 1.0 絲滑過渡進度
-  uniform vec3 u_bg_weights;     // 背景底色混合權重 (x: 水墨, y: 玄黑, z: 紙白)
+  uniform float u_bg_weights[5]; // 背景底色混合權重 (0: 水墨, 1: 玄黑, 2: 紙白, 3: 黛藍, 4: 赤霞)
   uniform float u_flow_speed;    // 流速
   uniform float u_dispersion;    // 色散強度
   uniform float u_grain;         // 電子塵埃顆粒強度
@@ -98,7 +98,7 @@ export const fragmentShaderSource = `
       vec3 c = vec3(0.9, 1.1, 0.85);
       vec3 d = vec3(0.35, 0.15, 0.60);
       return a + b * cos(2.0 * PI * (c * t + d));
-    } else {
+    } else if (preset == 3) {
       // 3: 浮光過隙 - 高飽和電光全息極光
       vec3 a = vec3(0.50, 0.50, 0.50);
       vec3 b = vec3(0.60, 0.60, 0.60);
@@ -107,6 +107,17 @@ export const fragmentShaderSource = `
       vec3 col = a + b * cos(2.0 * PI * (c * t + d));
       col = mix(col, vec3(0.0, 1.0, 0.88), smoothstep(0.20, 0.45, fract(t * 1.6)) * 0.5);
       col = mix(col, vec3(1.0, 0.15, 0.65), smoothstep(0.60, 0.85, fract(t * 1.6)) * 0.5);
+      return col;
+    } else {
+      // 4: 晶透琉璃 - 琥珀流金、寶石翡翠、孔雀靛藍與紫晶琉璃
+      vec3 a = vec3(0.66, 0.56, 0.64);
+      vec3 b = vec3(0.46, 0.42, 0.48);
+      vec3 c = vec3(1.15, 0.85, 1.05);
+      vec3 d = vec3(0.16, 0.44, 0.82);
+      vec3 col = a + b * cos(2.0 * PI * (c * t + d));
+      col = mix(col, vec3(1.0, 0.80, 0.26), smoothstep(0.18, 0.38, fract(t * 1.5)) * 0.48);
+      col = mix(col, vec3(0.10, 0.96, 0.78), smoothstep(0.52, 0.72, fract(t * 1.5)) * 0.42);
+      col = mix(col, vec3(0.88, 0.32, 0.95), smoothstep(0.78, 0.98, fract(t * 1.5)) * 0.36);
       return col;
     }
   }
@@ -299,7 +310,7 @@ export const fragmentShaderSource = `
 
       htAngle = PI * 0.15;
 
-    } else {
+    } else if (preset == 3) {
       // 模式 3: 浮光過隙 (Aurora Rift)
       float riftSpine = sin(twistedP.y * 1.5 + t * 0.5) * 0.36 + cos(twistedP.y * 0.75 - t * 0.2) * 0.16;
       float taper = clamp(0.70 - twistedP.y * 0.35, 0.30, 1.25);
@@ -329,7 +340,49 @@ export const fragmentShaderSource = `
       float shadowWidth = riftWidth * 2.1;
       darkVoid = exp(-pow(shadowDist / shadowWidth, 2.0) * 3.0);
 
+      htAngle = PI * 0.40;
+
+    } else {
+      // 模式 4: 晶透琉璃 (Prismatic Glaze)
+      // 晶體切面幾何折線、液態琉璃的高折射率反光與焦散
+      float spineWave1 = sin(twistedP.y * 1.9 + t * 0.58) * 0.30;
+      float spineWave2 = cos(twistedP.y * 3.4 - t * 0.42) * 0.12;
+      float crystalFacet = sin(twistedP.y * 7.0 + t * 0.75) * 0.045;
+      spineX = spineWave1 + spineWave2 + crystalFacet;
+      dx = twistedP.x - spineX;
+
+      float glassWidth = 0.23 + 0.09 * sin(twistedP.y * 2.8 + t * 0.45);
+      float absDx = abs(dx);
+      float normDist = absDx / max(glassWidth, 0.01);
+
+      float coreSharpness = mix(16.0, 5.5, u_defocus);
+      ribbonCore = exp(-normDist * normDist * coreSharpness);
+
+      // 琉璃內部折射稜面 (棱角焦散折光)
+      float facetRidge = cos(dx * 28.0 + twistedP.y * 12.0 - t * 1.5);
+      float internalCaustic = exp(-pow(normDist * 1.3, 2.0) * 8.0) * (0.6 + 0.4 * facetRidge);
+      ribbonCore = max(ribbonCore, internalCaustic * 0.95);
+      ribbonAura = exp(-normDist * 1.6) * 0.48;
+
+      flowCoord = twistedP.y * 1.5 - dx * 2.5 + t * 0.52 + facetRidge * 0.06;
+      vec3 colR = spectralPalette(flowCoord + disp * 1.5, 4);
+      vec3 colG = spectralPalette(flowCoord, 4);
+      vec3 colB = spectralPalette(flowCoord - disp * 1.5, 4);
+      ribbonColor = vec3(colR.r, colG.g, colB.b);
+
+      // 琉璃鑽石稜鏡雙重高光
+      float specularCenter = pow(clamp(1.0 - normDist * 1.6, 0.0, 1.0), 4.5);
+      float specularRim = pow(clamp(1.0 - abs(normDist - 0.72) * 3.5, 0.0, 1.0), 3.0) * 0.6;
+      ribbonColor += vec3(1.0, 0.98, 0.92) * specularCenter * 0.85;
+      ribbonColor += vec3(0.70, 0.95, 1.0) * specularRim * 0.60;
+
+      float shadowCenter = 0.14 * glassWidth;
+      float shadowDist = abs(dx - shadowCenter);
+      float shadowWidth = glassWidth * 1.9;
+      darkVoid = exp(-pow(shadowDist / shadowWidth, 2.0) * 3.2);
+
       htAngle = PI * 0.35;
+      htScale = mix(75.0, 165.0, u_halftone_scale);
     }
   }
 
@@ -469,16 +522,22 @@ export const fragmentShaderSource = `
     ribbonCore *= verticalFade;
     ribbonAura *= verticalFade;
 
-    // 背景設定 (平滑淡入淡出三種背景底色，絲滑過渡絕不硬切)
+    // 背景設定 (平滑淡入淡出五種背景底色，絲滑過渡絕不硬切)
     vec3 paperWhite = vec3(0.97, 0.97, 0.98);
     vec3 voidDark   = vec3(0.05, 0.06, 0.08);
 
     float subtleSplit = smoothstep(0.35, -0.35, twistedP.x - spineX * 0.5);
-    vec3 mode0Bg = mix(paperWhite, vec3(0.08, 0.09, 0.12), subtleSplit * 0.92);
-    vec3 mode1Bg = voidDark;
-    vec3 mode2Bg = paperWhite;
+    vec3 mode0Bg = mix(paperWhite, vec3(0.08, 0.09, 0.12), subtleSplit * 0.92);                          // 0: 水墨 (雙色水墨)
+    vec3 mode1Bg = voidDark;                                                                              // 1: 玄黑 (純粹玄黑)
+    vec3 mode2Bg = paperWhite;                                                                            // 2: 紙白 (明亮宣紙)
+    vec3 mode3Bg = mix(vec3(0.025, 0.048, 0.095), vec3(0.045, 0.082, 0.145), twistedP.y * 0.35 + 0.5); // 3: 黛藍 (深邃礦物靛藍)
+    vec3 mode4Bg = mix(vec3(0.085, 0.032, 0.048), vec3(0.138, 0.054, 0.076), twistedP.y * 0.35 + 0.5); // 4: 赤霞 (溫潤宮廷絳霞)
 
-    vec3 canvasBg = mode0Bg * u_bg_weights.x + mode1Bg * u_bg_weights.y + mode2Bg * u_bg_weights.z;
+    vec3 canvasBg = mode0Bg * u_bg_weights[0] +
+                    mode1Bg * u_bg_weights[1] +
+                    mode2Bg * u_bg_weights[2] +
+                    mode3Bg * u_bg_weights[3] +
+                    mode4Bg * u_bg_weights[4];
 
     vec3 baseScene = mix(canvasBg, voidDark, darkVoid * 0.95);
     vec3 compositeColor = mix(baseScene, ribbonColor, clamp(ribbonCore * 1.25 + ribbonAura * 0.6, 0.0, 1.0));
@@ -501,7 +560,7 @@ export const fragmentShaderSource = `
     // ----------------------------------------------------------------------
     vec3 shimmerLight = vec3(rippleShimmer * 0.13);
     vec3 shimmerDark = vec3(0.92, 0.96, 1.0) * rippleShimmer * 0.18;
-    vec3 rippleShimmerCol = mix(shimmerDark, shimmerLight, u_bg_weights.z);
+    vec3 rippleShimmerCol = mix(shimmerDark, shimmerLight, u_bg_weights[2]);
     compositeColor += rippleShimmerCol;
 
     compositeColor = clamp(compositeColor, 0.0, 1.0);
