@@ -1,5 +1,6 @@
 {
-  "version": "1.2.4",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.4/RainbowFlow.zip",
-  "notes": "動效升級：退出專注模式與全螢幕純淨模式時，底部控制元件具備絲滑物理彈出動效。"
+  "version": "1.2.5",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.5/RainbowFlow.zip",
+  "notes": "物理與動效升級：自然雙波水面漣漪（外環主波與反彈次波）、支援高達 10 個漣漪共存、全域快捷鍵 ⌥⌘S 免輔助授權即時喚出、底欄零回彈平滑彈出動效。"
 }
+
