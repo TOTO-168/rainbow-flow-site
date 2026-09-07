@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>GRAND MODERN CHINA // 虹光流序・電子微塵</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Serif+SC:wght@300;400;600&family=Noto+Serif+TC:wght@300;400;600&family=Space+Grotesk:wght@300;400;500&display=swap" rel="stylesheet">
+  <meta name="version" content="1.1.0">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-theme="paper">
+
+  <!-- WebGL 畫布 -->
+  <canvas id="gl-canvas"></canvas>
+
+  <!-- 自定義先鋒滑鼠跟隨器 -->
+  <div class="cursor-dot"></div>
+  <div class="cursor-ring"></div>
+
+  <!-- 提示浮動 Toast -->
+  <div id="toast" class="toast">微光流動・方寸微塵</div>
+
+  <!-- 1. 動態反白排版文字層 (Dynamic Inversion Text Layer) -->
+  <!-- 採用 mix-blend-mode: difference，當深色墨影或虹光流過文字時實時動態反白 -->
+  <div class="inversion-text-layer">
+    
+    <!-- 頂部標題與先鋒元數據 -->
+    <div class="brand-title">
+      <h1 class="brand-main">GRAND MODERN CHINA</h1>
+      <div class="brand-sub">
+        <span>月刊手藝</span>
+        <span class="dot-sep"></span>
+        <span>寫新故事</span>
+        <span class="dot-sep"></span>
+        <span>HOLOGRAPHIC ARCHIVE</span>
+      </div>
+    </div>
+
+    <!-- 右側垂直詩意文本 (直排東方先鋒編排 - 極簡凝練) -->
+    <aside class="poetry-container">
+      <div class="poem-line">虹光流動成詩</div>
+      <div class="poem-line">方寸微塵相生</div>
+      <div class="poem-annotation">PRISM // 2026</div>
+    </aside>
+
+  </div>
+
+  <!-- 2. 互動控制與面板層 (Interactive Controls Layer) -->
+  <!-- 採用高清晰深色玻璃擬態，確保按鈕在任何背景下均清晰可讀 -->
+  <div class="controls-layer">
+
+    <!-- 底部控制欄 (Bottom Interactive Dock) -->
+    <footer class="bottom-dock">
+      
+      <!-- 藝術風格切換 -->
+      <div class="preset-switcher">
+        <div class="preset-pill-indicator"></div>
+        <button class="preset-btn active" data-preset="0">珠光</button>
+        <button class="preset-btn" data-preset="1">微塵</button>
+        <button class="preset-btn" data-preset="2">流雲</button>
+        <button class="preset-btn" data-preset="3">浮光</button>
+      </div>
+
+      <!-- 操作按鈕 -->
+      <div class="dock-actions-container" id="dock-actions-container">
+        <div class="dock-actions">
+          <button id="hide-buttons-btn" class="action-btn" aria-label="隱藏按鈕" title="隱藏按鈕 (保留文字)">
+            <svg class="icon-eye" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg class="icon-eye-off" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+              <line x1="1" y1="1" x2="23" y2="23"></line>
+            </svg>
+          </button>
+
+          <button id="hide-all-btn" class="action-btn" aria-label="純淨全景" title="純淨全景 (隱藏按鈕與文字)">
+            <svg class="icon-maximize" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <polyline points="9 21 3 21 3 15"></polyline>
+              <line x1="21" y1="3" x2="14" y2="10"></line>
+              <line x1="3" y1="21" x2="10" y2="14"></line>
+            </svg>
+            <svg class="icon-minimize" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="4 14 10 14 10 20"></polyline>
+              <polyline points="20 10 14 10 14 4"></polyline>
+              <line x1="14" y1="10" x2="21" y2="3"></line>
+              <line x1="10" y1="14" x2="3" y2="21"></line>
+            </svg>
+          </button>
+
+          <button id="pause-btn" class="action-btn" aria-label="暫停畫面" title="暫停畫面">
+            <svg class="icon-pause" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="6" y="4" width="4" height="16"></rect>
+              <rect x="14" y="4" width="4" height="16"></rect>
+            </svg>
+            <svg class="icon-play" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+          </button>
+
+          <button id="capture-btn" class="action-btn" aria-label="典藏海報" title="典藏海報">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+              <circle cx="12" cy="13" r="4"></circle>
+            </svg>
+          </button>
+
+          <div class="panel-anchor-wrapper">
+            <button id="toggle-panel-btn" class="action-btn" aria-label="調校細節" title="調校細節">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="4" y1="6" x2="20" y2="6"></line>
+                <line x1="4" y1="12" x2="20" y2="12"></line>
+                <line x1="4" y1="18" x2="20" y2="18"></line>
+              </svg>
+            </button>
+
+            <!-- 參數微調抽屜面板 (Controls Drawer - 展開於按鈕正上方) -->
+            <div id="controls-panel" class="controls-panel">
+              <div class="panel-header">
+                <span class="panel-title">光流與塵埃微調</span>
+                <button id="close-panel-btn" class="panel-close">✕</button>
+              </div>
+
+              <div class="slider-group">
+                <div class="slider-item">
+                  <div class="slider-label-row">
+                    <span>流動節奏 (Flow Speed)</span>
+                    <span id="val-speed" class="slider-val">0.6</span>
+                  </div>
+                  <input type="range" id="slider-speed" class="custom-range" min="0.1" max="2.5" step="0.1" value="0.6">
+                </div>
+
+                <div class="slider-item">
+                  <div class="slider-label-row">
+                    <span>光學色散 (Dispersion)</span>
+                    <span id="val-dispersion" class="slider-val">1.2</span>
+                  </div>
+                  <input type="range" id="slider-dispersion" class="custom-range" min="0.0" max="3.0" step="0.1" value="1.2">
+                </div>
+
+                <div class="slider-item">
+                  <div class="slider-label-row">
+                    <span>微塵質地 (Stardust Grain)</span>
+                    <span id="val-grain" class="slider-val">0.6</span>
+                  </div>
+                  <input type="range" id="slider-grain" class="custom-range" min="0.1" max="2.5" step="0.1" value="0.6">
+                </div>
+
+                <div class="slider-item">
+                  <div class="slider-label-row">
+                    <span>游標影響力 (Cursor Influence)</span>
+                    <span id="val-cursor" class="slider-val">0.1</span>
+                  </div>
+                  <input type="range" id="slider-cursor" class="custom-range" min="0.0" max="5.0" step="0.1" value="0.1">
+                </div>
+
+                <div class="slider-item">
+                  <div class="slider-label-row">
+                    <span>底色意境 (Canvas Base)</span>
+                  </div>
+                  <div class="bg-mode-selector">
+                    <div class="bg-pill-indicator"></div>
+                    <button class="bg-btn active" data-mode="0">水墨</button>
+                    <button class="bg-btn" data-mode="1">玄黑</button>
+                    <button class="bg-btn" data-mode="2">紙白</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </footer>
+
+  </div>
+
+  <!-- 主腳本 -->
+  <script src="app.js"></script>
+</body>
+</html>
