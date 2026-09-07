@@ -1,5 +1,5 @@
 {
-  "version": "1.2.3",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.3/RainbowFlow.zip",
-  "notes": "選單簡化：移除 Esc 操作提示項目；版本資訊改為純顯示且不可點擊。"
+  "version": "1.2.4",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.4/RainbowFlow.zip",
+  "notes": "動效升級：退出專注模式與全螢幕純淨模式時，底部控制元件具備絲滑物理彈出動效。"
 }
