@@ -1,5 +1,5 @@
 {
-  "version": "1.2.13",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.13/RainbowFlow.zip",
-  "notes": "保留 Aura App Logo；恢復原本的選單列 sparkles 圖示，並延續舊版路徑與 Bundle ID 遷移相容性。"
+  "version": "1.2.14",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.14/RainbowFlow.zip",
+  "notes": "修正主螢幕延伸模式的主螢幕相機按鈕，Esc 展開後主、副螢幕均能顯示截圖按鈕。"
 }
