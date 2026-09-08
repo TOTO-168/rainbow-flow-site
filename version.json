@@ -1,5 +1,5 @@
 {
-  "version": "1.2.10",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.10/RainbowFlow.zip",
-  "notes": "修正 macOS Tahoe 選單列圖示消失：採用最終固定的 App 身份、保留舊版使用者設定，並避免建置與備份副本被 Launch Services 重複登錄。"
+  "version": "1.2.11",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.11/RainbowFlow.zip",
+  "notes": "修正雙螢幕延伸模式的相機按鈕、控制列同步與右下角定位，並強化閒置計時、設定驗證與更新啟動檢查。"
 }
