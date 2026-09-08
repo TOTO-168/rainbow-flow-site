@@ -1,5 +1,5 @@
 {
-  "version": "1.2.9",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.9/RainbowFlow.zip",
-  "notes": "修正從下載或解壓暫存位置開啟時，AppTranslocation 副本誤將正式安裝版關閉，導致選單列圖示消失的問題。暫存副本現在會自動轉交給 /Applications 內的正式版。"
+  "version": "1.2.10",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.10/RainbowFlow.zip",
+  "notes": "修正 macOS Tahoe 選單列圖示消失：採用最終固定的 App 身份、保留舊版使用者設定，並避免建置與備份副本被 Launch Services 重複登錄。"
 }
