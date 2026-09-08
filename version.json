@@ -1,5 +1,5 @@
 {
-  "version": "1.2.17",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.17/RainbowFlow.zip",
-  "notes": "新增流體拖曳水波與連續航跡系統，具備自然扇形尾波擴散與柔和水脊光影。"
+  "version": "1.2.18",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.18/Aura.zip",
+  "notes": "優化拖曳流暢度，延長完整拖曳軌跡與水波消散時間。"
 }
