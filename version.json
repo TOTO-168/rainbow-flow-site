@@ -1,5 +1,5 @@
 {
-  "version": "1.2.8",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.8/RainbowFlow.zip",
-  "notes": "修正 macOS 選單列狀態列圖示在睡眠、換螢幕或 Control Center 重整後消失：加入受控的可見性修復，並維持固定 Bundle ID 與穩定 Apple 簽章。"
+  "version": "1.2.9",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.9/RainbowFlow.zip",
+  "notes": "修正從下載或解壓暫存位置開啟時，AppTranslocation 副本誤將正式安裝版關閉，導致選單列圖示消失的問題。暫存副本現在會自動轉交給 /Applications 內的正式版。"
 }
