@@ -1,5 +1,5 @@
 {
-  "version": "1.2.7",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.7/RainbowFlow.zip",
-  "notes": "修正 macOS 選單列圖示在更新後消失：固定 Bundle ID 與狀態列識別、採用穩定 Apple 簽章，並防止舊版備份被 LaunchServices 誤認為多份 App。移除診斷功能與聲音控制，修正快捷鍵誤觸，並完善自訂色盤與色組儲存進度。"
+  "version": "1.2.8",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.8/RainbowFlow.zip",
+  "notes": "修正 macOS 選單列狀態列圖示在睡眠、換螢幕或 Control Center 重整後消失：加入受控的可見性修復，並維持固定 Bundle ID 與穩定 Apple 簽章。"
 }
