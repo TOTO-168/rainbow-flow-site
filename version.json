@@ -1,6 +1,5 @@
 {
-  "version": "1.2.6",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.6/RainbowFlow.zip",
-  "notes": "藝術與色彩體系升級：新增第五風格模式「琉璃」（琥珀流金、帝皇翡翠與晶體折射焦散）、底色意境新增「黛藍」與「赤霞」（支援五色平滑過渡）、設定抽屜表單移除關閉鈕極簡化、更新完成後自動提示對話框與系統通知。"
+  "version": "1.2.7",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.7/RainbowFlow.zip",
+  "notes": "修正 macOS 選單列圖示在更新後消失：固定 Bundle ID 與狀態列識別、採用穩定 Apple 簽章，並防止舊版備份被 LaunchServices 誤認為多份 App。移除診斷功能與聲音控制，修正快捷鍵誤觸，並完善自訂色盤與色組儲存進度。"
 }
-

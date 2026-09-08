@@ -1,6 +1,6 @@
 /**
  * 虹光流動・電子微塵・夢幻漩渦 (Iridescent Stardust & Dreamlike Vortex)
- * 完整 WebGL 渲染管線、薄膜干涉光學色散著色器、生成式空間音景、物理引力漩渦與海報導出
+ * 完整 WebGL 渲染管線、薄膜干涉光學色散著色器、物理引力漩渦與海報導出
  */
 
 // ============================================================================
@@ -23,12 +23,10 @@ const fragmentShaderSource = `
   uniform vec2 u_resolution;
   uniform float u_time;
   uniform vec2 u_mouse;
-  uniform vec2 u_mouse_vel;
   uniform vec4 u_ripples[10];
   uniform sampler2D u_text_texture;
 
   // 控制參數
-  uniform int u_preset;          // 當前模式 (向後相容)
   uniform int u_preset_from;     // 過渡來源風格
   uniform int u_preset_to;       // 過渡目標風格
   uniform float u_preset_mix;    // 0.0 ~ 1.0 絲滑過渡進度
@@ -40,7 +38,10 @@ const fragmentShaderSource = `
   uniform float u_vortex_power;  // 漩渦扭曲力
   uniform float u_defocus;       // 虛焦柔霧度
   uniform float u_contrast;      // 對比度
-  uniform float u_light_mode;    // 0: 混合黑白, 1: 偏暗底, 2: 偏白底
+  uniform vec3 u_custom_palette_a;
+  uniform vec3 u_custom_palette_b;
+  uniform vec3 u_custom_palette_c;
+  uniform float u_custom_palette_enabled;
 
   #define PI 3.14159265359
 
@@ -77,7 +78,15 @@ const fragmentShaderSource = `
     return 130.0 * dot(m, g);
   }
 
+  vec3 customPalette(float t) {
+    float segment = fract(t * 0.18) * 3.0;
+    if (segment < 1.0) return mix(u_custom_palette_a, u_custom_palette_b, smoothstep(0.0, 1.0, segment));
+    if (segment < 2.0) return mix(u_custom_palette_b, u_custom_palette_c, smoothstep(0.0, 1.0, segment - 1.0));
+    return mix(u_custom_palette_c, u_custom_palette_a, smoothstep(0.0, 1.0, segment - 2.0));
+  }
+
   vec3 spectralPalette(float t, int preset) {
+    if (u_custom_palette_enabled > 0.5) return customPalette(t);
     if (preset == 0) {
       // 0: 溫潤珠光 - 保留經典珍珠母貝微光
       vec3 a = vec3(0.88, 0.85, 0.90);
@@ -132,13 +141,13 @@ const fragmentShaderSource = `
     vec2 grid = fract(rotP * scale) - 0.5;
     float dist = length(grid);
     float radius = clamp(sqrt(density) * 0.65, 0.0, 0.5);
-    return smoothstep(radius + 0.08, radius - 0.08, dist);
+    return 1.0 - smoothstep(radius - 0.08, radius + 0.08, dist);
   }
 
   // ------------------------------------------------------------------------
   // 純粹單一尺寸電子微塵系統 (Uniform Single-Scale Electronic Stardust)
   // ------------------------------------------------------------------------
-  vec3 electronicStardust(vec2 uv, vec2 screenPos, float time, float densityMask) {
+  vec3 electronicStardust(vec2 uv, float time, float densityMask) {
     // 嚴格採用單一均勻微粒尺寸 (Strictly Single Uniform Pixel Grain)
     // 閃爍速率放緩 15% (37.19 * 0.85 = 31.61)
     vec2 seed = floor(uv * u_resolution) + fract(time * 31.61);
@@ -433,7 +442,7 @@ const fragmentShaderSource = `
         float deltaDist1 = organicDist - waveRadius;
 
         // 因果性平滑過渡：波前未受擾動水面維持靜謐
-        float causality = smoothstep(0.04, -0.04, deltaDist1);
+        float causality = 1.0 - smoothstep(-0.04, 0.04, deltaDist1);
 
         // 1. 第一道主波 (Outer Primary Crest)
         float packetWidth1 = 0.078 + age * 0.045;
@@ -458,7 +467,7 @@ const fragmentShaderSource = `
 
         // 雙重物理黏滯消散：
         // 1. 雙曲阻尼與長效平滑衰減 (初期舒緩起伏，悠長漫延後自然化入虛無)
-        float timeFade = smoothstep(4.2, 0.0, age) * (1.0 / (1.0 + age * 0.65));
+        float timeFade = (1.0 - smoothstep(0.0, 4.2, age)) * (1.0 / (1.0 + age * 0.65));
         // 2. 圓形波能量自然擴散衰減 (1/sqrt(r))
         float geoFade = 1.0 / sqrt(max(dist, 0.04) * 3.2 + 0.65);
 
@@ -519,7 +528,7 @@ const fragmentShaderSource = `
       htScale = mix(hScaleA, hScaleB, blend);
     }
 
-    float verticalFade = smoothstep(0.92, 0.45, abs(twistedP.y));
+    float verticalFade = 1.0 - smoothstep(0.45, 0.92, abs(twistedP.y));
     darkVoid *= verticalFade;
     ribbonCore *= verticalFade;
     ribbonAura *= verticalFade;
@@ -528,7 +537,7 @@ const fragmentShaderSource = `
     vec3 paperWhite = vec3(0.97, 0.97, 0.98);
     vec3 voidDark   = vec3(0.05, 0.06, 0.08);
 
-    float subtleSplit = smoothstep(0.35, -0.35, twistedP.x - spineX * 0.5);
+    float subtleSplit = 1.0 - smoothstep(-0.35, 0.35, twistedP.x - spineX * 0.5);
     vec3 mode0Bg = mix(paperWhite, vec3(0.08, 0.09, 0.12), subtleSplit * 0.92);                          // 0: 水墨 (雙色水墨)
     vec3 mode1Bg = voidDark;                                                                              // 1: 玄黑 (純粹玄黑)
     vec3 mode2Bg = paperWhite;                                                                            // 2: 紙白 (明亮宣紙)
@@ -572,7 +581,7 @@ const fragmentShaderSource = `
     // 震撼的電子塵埃微粒層 (Luminous Electronic Stardust)
     // ----------------------------------------------------------------------
     float dustMask = mix(0.45, 1.85, darkVoid + ribbonAura);
-    vec3 stardust = electronicStardust(uv, twistedP, u_time, dustMask);
+    vec3 stardust = electronicStardust(uv, u_time, dustMask);
     float dustAmount = u_grain * 0.22;
     vec3 sceneWithDust = macroScene + stardust * dustAmount;
 
@@ -596,167 +605,39 @@ const fragmentShaderSource = `
 `;
 
 // ============================================================================
-// 2. Web Audio 生成式空靈音景
-// ============================================================================
-class AmbientAudioEngine {
-  constructor() {
-    this.ctx = null;
-    this.isPlaying = false;
-    this.masterGain = null;
-    this.filter = null;
-    this.delayNode = null;
-    this.delayGain = null;
-    this.panner = null;
-    this.lastChimeTime = 0;
-
-    this.scaleFrequencies = [
-      130.81, 146.83, 164.81, 196.00, 220.00,
-      261.63, 293.66, 329.63, 392.00, 440.00,
-      523.25, 659.25, 783.99, 880.00, 1046.50
-    ];
-  }
-
-  init() {
-    if (this.ctx) return;
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    this.ctx = new AudioContext();
-
-    this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.setValueAtTime(0.0001, this.ctx.currentTime);
-
-    this.panner = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
-
-    this.filter = this.ctx.createBiquadFilter();
-    this.filter.type = 'lowpass';
-    this.filter.frequency.setValueAtTime(380, this.ctx.currentTime);
-    this.filter.Q.setValueAtTime(3.5, this.ctx.currentTime);
-
-    this.delayNode = this.ctx.createDelay();
-    this.delayNode.delayTime.setValueAtTime(0.42, this.ctx.currentTime);
-
-    this.delayGain = this.ctx.createGain();
-    this.delayGain.gain.setValueAtTime(0.45, this.ctx.currentTime);
-
-    const delayDampFilter = this.ctx.createBiquadFilter();
-    delayDampFilter.type = 'lowpass';
-    delayDampFilter.frequency.setValueAtTime(1600, this.ctx.currentTime);
-
-    this.delayNode.connect(delayDampFilter);
-    delayDampFilter.connect(this.delayGain);
-    this.delayGain.connect(this.delayNode);
-    this.delayGain.connect(this.masterGain);
-
-    if (this.panner) {
-      this.filter.connect(this.panner);
-      this.panner.connect(this.masterGain);
-    } else {
-      this.filter.connect(this.masterGain);
-    }
-    this.filter.connect(this.delayNode);
-    this.masterGain.connect(this.ctx.destination);
-
-    this.startDrone();
-  }
-
-  startDrone() {
-    const osc1 = this.ctx.createOscillator();
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(65.41, this.ctx.currentTime);
-
-    const osc2 = this.ctx.createOscillator();
-    osc2.type = 'triangle';
-    osc2.frequency.setValueAtTime(98.15, this.ctx.currentTime);
-
-    const droneGain = this.ctx.createGain();
-    droneGain.gain.setValueAtTime(0.22, this.ctx.currentTime);
-
-    osc1.connect(droneGain);
-    osc2.connect(droneGain);
-    droneGain.connect(this.filter);
-
-    osc1.start();
-    osc2.start();
-  }
-
-  triggerChime(freq, velocity = 0.5) {
-    if (!this.isPlaying || !this.ctx) return;
-    const now = this.ctx.currentTime;
-
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, now);
-    osc.frequency.exponentialRampToValueAtTime(freq * 1.002, now + 1.8);
-
-    const attack = 0.04;
-    const decay = 2.4;
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.linearRampToValueAtTime(velocity * 0.18, now + attack);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + decay);
-
-    osc.connect(gain);
-    gain.connect(this.filter);
-    gain.connect(this.delayNode);
-
-    osc.start(now);
-    osc.stop(now + decay);
-  }
-
-  updateInteraction(mouseX, mouseY, velocity, vortexPower) {
-    if (!this.isPlaying || !this.ctx) return;
-    const now = this.ctx.currentTime;
-
-    if (this.panner) {
-      const panVal = Math.max(-1, Math.min(1, (mouseX - 0.5) * 1.8));
-      this.panner.pan.setTargetAtTime(panVal, now, 0.1);
-    }
-
-    const targetCutoff = 250 + (1.0 - mouseY) * 900 + velocity * 1200 + vortexPower * 500;
-    this.filter.frequency.setTargetAtTime(Math.min(3600, Math.max(180, targetCutoff)), now, 0.12);
-
-    if (velocity > 0.08 && now - this.lastChimeTime > 0.35) {
-      const idx = Math.floor(Math.random() * this.scaleFrequencies.length);
-      const freq = this.scaleFrequencies[idx];
-      this.triggerChime(freq, Math.min(1.0, velocity * 1.5));
-      this.lastChimeTime = now;
-    }
-  }
-
-  toggle() {
-    if (!this.ctx) this.init();
-    if (this.ctx.state === 'suspended') this.ctx.resume();
-
-    this.isPlaying = !this.isPlaying;
-    const now = this.ctx.currentTime;
-    if (this.isPlaying) {
-      this.masterGain.gain.cancelScheduledValues(now);
-      this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
-      this.masterGain.gain.linearRampToValueAtTime(0.5, now + 1.2);
-    } else {
-      this.masterGain.gain.cancelScheduledValues(now);
-      this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
-      this.masterGain.gain.linearRampToValueAtTime(0.0001, now + 0.8);
-    }
-    return this.isPlaying;
-  }
-}
-
-const soundEngine = new AmbientAudioEngine();
-
-// ============================================================================
-// 3. WebGL 控制器與互動邏輯
+// 2. WebGL 控制器與互動邏輯
 // ============================================================================
 class IridescentApp {
   getDefaultSettings() {
     return {
       preset: 0,
-      lightMode: 0,
+      lightMode: 3,
       flowSpeed: 0.60,
       dispersion: 1.20,
       grain: 0.60,
-      cursorInfluence: 0.10
+      cursorInfluence: 0.20,
+      customPalette: ['#ff5a82', '#28c3ff', '#a04bff'],
+      customPaletteEnabled: false,
+      customPaletteSlots: [[], [], []]
     };
+  }
+
+  normalizeHexColor(value, fallback) {
+    return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : fallback;
+  }
+
+  normalizePaletteSlots(slots) {
+    const defaults = this.getDefaultSettings().customPalette;
+    if (!Array.isArray(slots) || slots.length !== 3) return [[], [], []];
+    return slots.map((slot) => {
+      if (!Array.isArray(slot) || slot.length !== 3) return [];
+      return slot.map((color, index) => this.normalizeHexColor(color, defaults[index]));
+    });
+  }
+
+  hexToRgb(hex) {
+    const value = parseInt(hex.slice(1), 16);
+    return [((value >> 16) & 255) / 255, ((value >> 8) & 255) / 255, (value & 255) / 255];
   }
 
   loadSettings() {
@@ -779,6 +660,16 @@ class IridescentApp {
     if (typeof s.dispersion !== 'number' || isNaN(s.dispersion) || s.dispersion < 0.0 || s.dispersion > 3.0) s.dispersion = defaults.dispersion;
     if (typeof s.grain !== 'number' || isNaN(s.grain) || s.grain < 0.1 || s.grain > 2.5) s.grain = defaults.grain;
     if (typeof s.cursorInfluence !== 'number' || isNaN(s.cursorInfluence) || s.cursorInfluence < 0.0 || s.cursorInfluence > 5.0) s.cursorInfluence = defaults.cursorInfluence;
+    if (!Array.isArray(s.customPalette) || s.customPalette.length !== 3) {
+      s.customPalette = defaults.customPalette.slice();
+    } else {
+      s.customPalette = s.customPalette.map((color, index) => this.normalizeHexColor(color, defaults.customPalette[index]));
+    }
+    s.customPaletteEnabled = s.customPaletteEnabled === true;
+    const savedSlots = loaded && Array.isArray(loaded.customPaletteSlots) && loaded.customPaletteSlots.length === 3
+      ? loaded.customPaletteSlots
+      : (loaded && Array.isArray(loaded.customPalette) ? [s.customPalette.slice(), [], []] : defaults.customPaletteSlots);
+    s.customPaletteSlots = this.normalizePaletteSlots(savedSlots);
 
     return s;
   }
@@ -788,13 +679,20 @@ class IridescentApp {
       clearTimeout(this._saveSettingsTimer);
       this._saveSettingsTimer = null;
     }
+    const committedPalette = this.paletteEditSnapshot || {
+      colors: this.state.customPalette,
+      enabled: this.state.customPaletteEnabled
+    };
     const current = {
       preset: this.state.preset,
       lightMode: this.state.lightMode,
       flowSpeed: this.state.flowSpeed,
       dispersion: this.state.dispersion,
       grain: this.state.grain,
-      cursorInfluence: this.state.cursorInfluence
+      cursorInfluence: this.state.cursorInfluence,
+      customPalette: committedPalette.colors.slice(),
+      customPaletteEnabled: committedPalette.enabled,
+      customPaletteSlots: this.state.customPaletteSlots.map((slot) => slot.slice())
     };
 
     // 1. 瀏覽器端 LocalStorage 保存
@@ -840,6 +738,9 @@ class IridescentApp {
       defocus: 0.30,
       contrast: 1.15,
       lightMode: initialSettings.lightMode,
+      customPalette: initialSettings.customPalette.slice(),
+      customPaletteEnabled: initialSettings.customPaletteEnabled,
+      customPaletteSlots: initialSettings.customPaletteSlots.map((slot) => slot.slice()),
       bgWeights: [
         initialSettings.lightMode === 0 ? 1.0 : 0.0,
         initialSettings.lightMode === 1 ? 1.0 : 0.0,
@@ -855,9 +756,7 @@ class IridescentApp {
         initialSettings.lightMode === 4 ? 1.0 : 0.0
       ],
       isPaused: false,
-      isUIVisible: true,
-      viewMode: 'normal', // 'normal' | 'hide_buttons' | 'hide_all'
-      hideTimer: null
+      viewMode: 'normal' // 'normal' | 'hide_buttons' | 'hide_all'
     };
 
     this.updateThemeClass();
@@ -872,16 +771,17 @@ class IridescentApp {
       targetX: 0.5,
       targetY: 0.5,
       vx: 0,
-      vy: 0,
-      isDown: false,
-      pressPower: 0
+      vy: 0
     };
 
-    this.inversionLayer = document.querySelector('.inversion-text-layer');
-    this.controlsLayer = document.querySelector('.controls-layer');
     this.controlsPanel = document.getElementById('controls-panel');
-    this.toast = document.getElementById('toast');
-    this.soundBtn = document.getElementById('sound-btn');
+    this.customPaletteRGB = this.state.customPalette.map((color) => this.hexToRgb(color));
+    this.customPaletteTargetRGB = this.customPaletteRGB.map((color) => color.slice());
+    this.paletteEditSnapshot = null;
+    this.paletteEditDirty = false;
+    this.paletteSlotSelection = 0;
+    this.paletteSaveFeedbackTimer = null;
+    this.openPaletteInput = null;
 
     // 物理擴散水波漣漪隊列 (最多支援 10 組重疊干涉漣漪)
     this.ripples = Array.from({ length: 10 }, () => ({ x: 0.5, y: 0.5, time: -100.0, strength: 0.0 }));
@@ -892,6 +792,9 @@ class IridescentApp {
     this.textCanvas = null;
     this.textCtx = null;
     this.textTexture = null;
+    this.rafId = null;
+    this.isRendering = false;
+    this.contextLost = false;
 
     // 螢幕主從角色與外接螢幕設定 (預設為副螢幕延伸: 主螢幕文字，副螢幕純淨)
     const screenInfo = window.__SCREEN_INFO__ || { isMain: true, mode: 'secondary_extend' };
@@ -1005,7 +908,7 @@ class IridescentApp {
     const mode = this.screenRole ? this.screenRole.mode : 'secondary_extend';
     const hasText = this.shouldDisplayText(isMain, mode);
 
-    if (!hasText || !this.state.isUIVisible || this.state.viewMode === 'hide_all') {
+    if (!hasText || this.state.viewMode === 'hide_all') {
       this.uploadTextTexture();
       return;
     }
@@ -1014,7 +917,7 @@ class IridescentApp {
     ctx.scale(dpr, dpr);
 
     const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-    const serifFont = "'Noto Serif TC', 'Noto Serif SC', 'Songti SC', 'STSong', 'PMingLiU', serif";
+    const serifFont = "'Hiragino Mincho ProN', 'Songti SC', 'STSong', 'PMingLiU', serif";
 
     // 1. 品牌主標題 (GRAND MODERN CHINA)
     const isMobile = width <= 900;
@@ -1027,7 +930,7 @@ class IridescentApp {
     ctx.fillStyle = '#ffffff';
     ctx.textBaseline = 'top';
 
-    ctx.font = `600 ${brandMainSize}px 'Cinzel', serif`;
+    ctx.font = `600 ${brandMainSize}px 'Hiragino Mincho ProN', serif`;
     ctx.textAlign = 'left';
     this.drawSpacedText(ctx, 'GRAND MODERN CHINA', leftX, topY, 0.48 * brandMainSize);
 
@@ -1087,14 +990,14 @@ class IridescentApp {
         this.renderTextTexture();
       });
       if (document.fonts.load) {
-        document.fonts.load(`400 16px 'Noto Serif TC'`, '月刊手藝寫新故事虹光流動成詩').then(() => this.renderTextTexture());
-        document.fonts.load(`400 16px 'Noto Serif SC'`, '月刊手藝寫新故事虹光流動成詩').then(() => this.renderTextTexture());
+        document.fonts.load(`400 16px 'Hiragino Mincho ProN'`, '月刊手藝寫新故事虹光流動成詩').then(() => this.renderTextTexture());
+        document.fonts.load(`400 16px 'Songti SC'`, '月刊手藝寫新故事虹光流動成詩').then(() => this.renderTextTexture());
       }
     }
     this.setupEventListeners();
     this.setupUI();
     this.onResize();
-    requestAnimationFrame((t) => this.render(t));
+    this.startRenderLoop();
   }
 
   initWebGL() {
@@ -1106,13 +1009,19 @@ class IridescentApp {
     });
 
     if (!gl) {
-      alert('您的瀏覽器不支援 WebGL');
-      return;
+      if (!this.contextLost) alert('您的瀏覽器不支援 WebGL');
+      return false;
     }
     this.gl = gl;
 
     const vertShader = this.createShader(gl.VERTEX_SHADER, vertexShaderSource);
     const fragShader = this.createShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
+    if (!vertShader || !fragShader) {
+      if (vertShader) gl.deleteShader(vertShader);
+      if (fragShader) gl.deleteShader(fragShader);
+      this.gl = null;
+      return false;
+    }
 
     const program = gl.createProgram();
     gl.attachShader(program, vertShader);
@@ -1121,8 +1030,14 @@ class IridescentApp {
 
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
       console.error('Shader link error:', gl.getProgramInfoLog(program));
-      return;
+      gl.deleteProgram(program);
+      gl.deleteShader(vertShader);
+      gl.deleteShader(fragShader);
+      this.gl = null;
+      return false;
     }
+    gl.deleteShader(vertShader);
+    gl.deleteShader(fragShader);
     this.program = program;
     gl.useProgram(program);
 
@@ -1143,10 +1058,11 @@ class IridescentApp {
     gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
 
     const uniformNames = [
-      'u_resolution', 'u_time', 'u_mouse', 'u_mouse_vel',
-      'u_preset', 'u_preset_from', 'u_preset_to', 'u_preset_mix', 'u_bg_weights',
+      'u_resolution', 'u_time', 'u_mouse',
+      'u_preset_from', 'u_preset_to', 'u_preset_mix', 'u_bg_weights',
       'u_flow_speed', 'u_dispersion', 'u_grain',
-      'u_halftone_scale', 'u_vortex_power', 'u_defocus', 'u_contrast', 'u_light_mode'
+      'u_halftone_scale', 'u_vortex_power', 'u_defocus', 'u_contrast',
+      'u_custom_palette_a', 'u_custom_palette_b', 'u_custom_palette_c', 'u_custom_palette_enabled'
     ];
     uniformNames.forEach((name) => {
       this.uniforms[name] = gl.getUniformLocation(program, name);
@@ -1154,6 +1070,7 @@ class IridescentApp {
     this.uniforms.u_bg_weights = gl.getUniformLocation(program, 'u_bg_weights[0]') || gl.getUniformLocation(program, 'u_bg_weights');
     this.uniforms.u_ripples = gl.getUniformLocation(program, 'u_ripples[0]') || gl.getUniformLocation(program, 'u_ripples');
     this.uniforms.u_text_texture = gl.getUniformLocation(program, 'u_text_texture');
+    return true;
   }
 
   createShader(type, source) {
@@ -1169,8 +1086,36 @@ class IridescentApp {
     return shader;
   }
 
+  handleWebGLContextLost(event) {
+    event.preventDefault();
+    this.contextLost = true;
+    this.stopRenderLoop();
+  }
+
+  handleWebGLContextRestored() {
+    this.contextLost = false;
+    this.gl = null;
+    this.program = null;
+    this.uniforms = {};
+    this.textTexture = null;
+    if (this.initWebGL()) {
+      this.renderTextTexture();
+      this.startRenderLoop();
+    }
+  }
+
   setupEventListeners() {
-    window.addEventListener('resize', () => this.onResize());
+    this.canvas.addEventListener('webglcontextlost', (event) => this.handleWebGLContextLost(event));
+    this.canvas.addEventListener('webglcontextrestored', () => this.handleWebGLContextRestored());
+    window.addEventListener('resize', () => {
+      this.onResize();
+      this.updatePresetIndicator(false);
+      this.updateBgIndicator(false);
+    });
+
+    const isUIEventTarget = (target) => target instanceof Element && (
+      target.closest('.bottom-dock') || target.closest('.controls-panel') || target.closest('.action-btn')
+    );
 
     const updateMousePos = (clientX, clientY) => {
       const rect = this.canvas.getBoundingClientRect();
@@ -1180,24 +1125,14 @@ class IridescentApp {
 
     window.addEventListener('mousemove', (e) => {
       updateMousePos(e.clientX, e.clientY);
-      const overUI = !!(e.target.closest('.bottom-dock') || e.target.closest('.controls-panel') || e.target.closest('.action-btn'));
+      const overUI = !!isUIEventTarget(e.target);
       document.body.classList.toggle('cursor-over-ui', overUI);
     });
 
     window.addEventListener('mousedown', (e) => {
       if (this.state.isPaused) return;
-      if (e.target.closest('.bottom-dock') || e.target.closest('.controls-panel') || e.target.closest('.action-btn')) return;
-      this.mouse.isDown = true;
-      document.body.classList.add('interacting');
+      if (isUIEventTarget(e.target)) return;
       this.addRipple(e.clientX, e.clientY);
-      if (soundEngine.isPlaying) {
-        soundEngine.triggerChime(soundEngine.scaleFrequencies[Math.floor(Math.random() * soundEngine.scaleFrequencies.length)], 0.5);
-      }
-    });
-
-    window.addEventListener('mouseup', () => {
-      this.mouse.isDown = false;
-      document.body.classList.remove('interacting');
     });
 
     window.addEventListener('touchmove', (e) => {
@@ -1210,21 +1145,22 @@ class IridescentApp {
       if (this.state.isPaused) return;
       if (e.touches.length > 0) {
         const t = e.touches[0];
-        if (e.target.closest('.bottom-dock') || e.target.closest('.controls-panel') || e.target.closest('.action-btn')) return;
-        this.mouse.isDown = true;
+        if (isUIEventTarget(e.target)) return;
         this.addRipple(t.clientX, t.clientY);
         updateMousePos(t.clientX, t.clientY);
-        if (soundEngine.isPlaying) {
-          soundEngine.triggerChime(soundEngine.scaleFrequencies[Math.floor(Math.random() * soundEngine.scaleFrequencies.length)], 0.5);
-        }
       }
     }, { passive: true });
 
-    window.addEventListener('touchend', () => {
-      this.mouse.isDown = false;
-    });
-
     window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        this.handleEscKey();
+        return;
+      }
+
+      const isInteractiveTarget = e.target instanceof Element
+        && !!e.target.closest('button, input, select, textarea, [contenteditable="true"]');
+      if (isInteractiveTarget || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+
       if (e.key === 'h' || e.key === 'H') {
         this.toggleUI();
       } else if (e.key === ' ' || e.code === 'Space') {
@@ -1232,8 +1168,6 @@ class IridescentApp {
         this.togglePause();
       } else if (e.key === 's' || e.key === 'S') {
         this.capturePoster();
-      } else if (e.key === 'Escape') {
-        this.handleEscKey();
       } else if (e.key >= '1' && e.key <= '5') {
         this.setPreset(parseInt(e.key) - 1);
         this.saveSettings();
@@ -1244,9 +1178,7 @@ class IridescentApp {
   handleEscKey() {
     // 1. 若控制抽屜開啟，先關閉抽屜
     if (this.controlsPanel && this.controlsPanel.classList.contains('open')) {
-      this.controlsPanel.classList.remove('open');
-      const togglePanelBtn = document.getElementById('toggle-panel-btn');
-      if (togglePanelBtn) togglePanelBtn.classList.remove('active');
+      this.setControlsPanelOpen(false, { focusTrigger: true });
       return;
     }
 
@@ -1254,13 +1186,38 @@ class IridescentApp {
     if (this.state.viewMode !== 'normal') {
       document.body.classList.remove('satellite-screen');
       this.setViewMode('normal');
-      this.showToast('介面已恢復');
       return;
     }
 
     // 3. 若已在調整介面，再次按 Esc 則是退出螢幕保護程式
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.macApp) {
       window.webkit.messageHandlers.macApp.postMessage({ action: 'exitScreensaver' });
+    }
+  }
+
+  setControlsPanelOpen(open, { focusTrigger = false } = {}) {
+    if (!this.controlsPanel) return;
+    const togglePanelBtn = document.getElementById('toggle-panel-btn');
+    this.controlsPanel.classList.toggle('open', open);
+    this.controlsPanel.setAttribute('aria-hidden', String(!open));
+    this.controlsPanel.inert = !open;
+    this.controlsPanel.toggleAttribute('inert', !open);
+    if (togglePanelBtn) {
+      togglePanelBtn.classList.toggle('active', open);
+      togglePanelBtn.setAttribute('aria-expanded', String(open));
+    }
+
+    if (open) {
+      this.beginPaletteEdit();
+      this.updateBgIndicator(false);
+      requestAnimationFrame(() => {
+        this.updateBgIndicator(false);
+        const firstControl = this.controlsPanel.querySelector('input, button, select, textarea');
+        if (firstControl) firstControl.focus({ preventScroll: true });
+      });
+    } else {
+      this.cancelPaletteEdit();
+      if (focusTrigger && togglePanelBtn) togglePanelBtn.focus();
     }
   }
 
@@ -1274,31 +1231,12 @@ class IridescentApp {
       });
     });
 
-    if (this.soundBtn) {
-      this.soundBtn.addEventListener('click', () => {
-        const isPlaying = soundEngine.toggle();
-        if (isPlaying) {
-          this.soundBtn.classList.add('active');
-          this.soundBtn.innerHTML = '♫ SOUNDSCAPE: ON';
-          this.showToast('生成式空靈音景已開啟');
-        } else {
-          this.soundBtn.classList.remove('active');
-          this.soundBtn.innerHTML = '♫ SOUNDSCAPE: OFF';
-          this.showToast('音景已靜音');
-        }
-      });
-    }
-
     const togglePanelBtn = document.getElementById('toggle-panel-btn');
     if (togglePanelBtn) {
       togglePanelBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const isOpen = this.controlsPanel.classList.toggle('open');
-        togglePanelBtn.classList.toggle('active', isOpen);
-        if (isOpen) {
-          this.updateBgIndicator(false);
-          requestAnimationFrame(() => this.updateBgIndicator(false));
-        }
+        const isOpen = !this.controlsPanel.classList.contains('open');
+        this.setControlsPanelOpen(isOpen, { focusTrigger: !isOpen });
       });
     }
 
@@ -1314,8 +1252,7 @@ class IridescentApp {
     document.addEventListener('click', (e) => {
       if (this.controlsPanel && this.controlsPanel.classList.contains('open')) {
         if (!e.target.closest('#controls-panel') && !e.target.closest('#toggle-panel-btn')) {
-          this.controlsPanel.classList.remove('open');
-          if (togglePanelBtn) togglePanelBtn.classList.remove('active');
+          this.setControlsPanelOpen(false);
         }
       }
     });
@@ -1338,18 +1275,102 @@ class IridescentApp {
     bindSlider('slider-grain', 'grain', 'val-grain', 1, 1);
     bindSlider('slider-cursor', 'cursorInfluence', 'val-cursor', 1, 1);
 
+    document.querySelectorAll('.palette-color').forEach((input, index) => {
+      input.addEventListener('click', (event) => {
+        // WKWebView 的原生色票面板沒有網頁端 close API；再次點擊同一
+        // 色塊時取消預設開啟行為並移除焦點，即可收回原生面板。
+        if (this.openPaletteInput === input) {
+          event.preventDefault();
+          event.stopPropagation();
+          input.blur();
+          this.openPaletteInput = null;
+          return;
+        }
+        this.openPaletteInput = input;
+      });
+      const syncPaletteColor = (event) => {
+        const value = this.normalizeHexColor(event.target.value, this.state.customPalette[index]);
+        if (value === this.state.customPalette[index]) return;
+        this.beginPaletteEdit();
+        this.paletteEditDirty = true;
+        const colors = this.state.customPalette.slice();
+        colors[index] = value;
+        this.updateCustomPalette(colors, true);
+      };
+      input.addEventListener('input', syncPaletteColor);
+      input.addEventListener('change', syncPaletteColor);
+    });
+    document.addEventListener('pointerdown', (event) => {
+      if (!event.target.closest('.palette-color')) {
+        this.openPaletteInput = null;
+      }
+    }, true);
+    const applyPaletteBtn = document.getElementById('apply-palette-btn');
+    if (applyPaletteBtn) {
+      applyPaletteBtn.addEventListener('click', () => {
+        this.beginPaletteEdit();
+        const enabled = this.paletteEditDirty ? this.state.customPaletteEnabled : true;
+        this.updateCustomPalette(this.state.customPalette, enabled);
+        this.commitPaletteEdit();
+        this.saveSettings();
+      });
+    }
+    const resetPaletteBtn = document.getElementById('reset-palette-btn');
+    if (resetPaletteBtn) {
+      resetPaletteBtn.addEventListener('click', () => {
+        this.beginPaletteEdit();
+        this.paletteEditDirty = true;
+        this.updateCustomPalette(this.getDefaultSettings().customPalette, false);
+      });
+    }
+
+    document.querySelectorAll('.palette-slot').forEach((button, index) => {
+      button.addEventListener('click', () => {
+        this.paletteSlotSelection = index;
+        const colors = this.state.customPaletteSlots[index];
+        if (colors.length === 3) {
+          this.updateCustomPalette(colors, true);
+          this.commitPaletteEdit();
+          this.saveSettings();
+        }
+        this.syncPaletteSlots();
+      });
+    });
+    const savePaletteSlotBtn = document.getElementById('save-palette-slot-btn');
+    if (savePaletteSlotBtn) {
+      savePaletteSlotBtn.addEventListener('click', () => {
+        const index = this.paletteSlotSelection;
+        const colors = Array.from(document.querySelectorAll('.palette-color')).map((input, colorIndex) => (
+          this.normalizeHexColor(input.value, this.state.customPalette[colorIndex])
+        ));
+        this.updateCustomPalette(colors, true);
+        this.state.customPaletteSlots[index] = colors.slice();
+        this.commitPaletteEdit();
+        this.saveSettings();
+        this.syncPaletteSlots();
+        if (this.paletteSaveFeedbackTimer) clearTimeout(this.paletteSaveFeedbackTimer);
+        savePaletteSlotBtn.textContent = '已儲存';
+        this.paletteSaveFeedbackTimer = setTimeout(() => {
+          this.paletteSaveFeedbackTimer = null;
+          this.syncPaletteSlots();
+        }, 900);
+      });
+    }
+
     const bgBtns = document.querySelectorAll('.bg-btn');
     bgBtns.forEach((btn) => {
       btn.addEventListener('click', () => {
-        bgBtns.forEach((b) => b.classList.remove('active'));
+        bgBtns.forEach((b) => {
+          b.classList.remove('active');
+          b.setAttribute('aria-pressed', 'false');
+        });
         btn.classList.add('active');
+        btn.setAttribute('aria-pressed', 'true');
         const mode = parseInt(btn.dataset.mode);
         this.state.lightMode = mode;
         this.state.targetBgWeights = [0.0, 0.0, 0.0, 0.0, 0.0];
         this.state.targetBgWeights[mode] = 1.0;
-        this.updateThemeClass();
         this.updateBgIndicator(true);
-        this.showToast(btn.innerText);
         this.saveSettings();
       });
     });
@@ -1360,7 +1381,6 @@ class IridescentApp {
         e.stopPropagation();
         if (this.state.viewMode === 'hide_buttons') {
           this.setViewMode('normal');
-          this.showToast('介面已恢復');
         } else {
           this.setViewMode('hide_buttons');
         }
@@ -1373,7 +1393,6 @@ class IridescentApp {
         e.stopPropagation();
         if (this.state.viewMode === 'hide_all') {
           this.setViewMode('normal');
-          this.showToast('介面已恢復');
         } else {
           this.setViewMode('hide_all');
         }
@@ -1398,10 +1417,6 @@ class IridescentApp {
     // 將載入的使用者設定同步至介面控制項
     this.syncUIFromState();
 
-    window.addEventListener('resize', () => {
-      this.updatePresetIndicator(false);
-      this.updateBgIndicator(false);
-    });
     if (document.fonts) {
       document.fonts.ready.then(() => {
         this.updatePresetIndicator(false);
@@ -1414,13 +1429,17 @@ class IridescentApp {
     // 1. 同步風格預設按鈕
     const presetBtns = document.querySelectorAll('.preset-btn');
     presetBtns.forEach((b) => {
-      b.classList.toggle('active', parseInt(b.dataset.preset) === this.state.preset);
+      const isActive = parseInt(b.dataset.preset) === this.state.preset;
+      b.classList.toggle('active', isActive);
+      b.setAttribute('aria-pressed', String(isActive));
     });
 
     // 2. 同步底色模式按鈕與主題
     const bgBtns = document.querySelectorAll('.bg-btn');
     bgBtns.forEach((b) => {
-      b.classList.toggle('active', parseInt(b.dataset.mode) === Math.round(this.state.lightMode));
+      const isActive = parseInt(b.dataset.mode) === Math.round(this.state.lightMode);
+      b.classList.toggle('active', isActive);
+      b.setAttribute('aria-pressed', String(isActive));
     });
     this.updateThemeClass();
 
@@ -1439,6 +1458,8 @@ class IridescentApp {
     setSliderVal('slider-dispersion', 'val-dispersion', this.state.dispersion, 1);
     setSliderVal('slider-grain', 'val-grain', this.state.grain, 1);
     setSliderVal('slider-cursor', 'val-cursor', this.state.cursorInfluence, 1);
+    this.syncCustomPaletteInputs();
+    this.syncPaletteSlots();
 
     // 4. 重整膠囊指示器位置
     requestAnimationFrame(() => {
@@ -1461,15 +1482,87 @@ class IridescentApp {
       this.state.lightMode = settings.lightMode;
       this.state.targetBgWeights = [0.0, 0.0, 0.0, 0.0, 0.0];
       this.state.targetBgWeights[settings.lightMode] = 1.0;
-      this.updateThemeClass();
     }
 
-    if (typeof settings.flowSpeed === 'number') this.state.flowSpeed = settings.flowSpeed;
-    if (typeof settings.dispersion === 'number') this.state.dispersion = settings.dispersion;
-    if (typeof settings.grain === 'number') this.state.grain = settings.grain;
-    if (typeof settings.cursorInfluence === 'number') this.state.cursorInfluence = settings.cursorInfluence;
+    if (Number.isFinite(settings.flowSpeed) && settings.flowSpeed >= 0.1 && settings.flowSpeed <= 2.5) {
+      this.state.flowSpeed = settings.flowSpeed;
+    }
+    if (Number.isFinite(settings.dispersion) && settings.dispersion >= 0 && settings.dispersion <= 3) {
+      this.state.dispersion = settings.dispersion;
+    }
+    if (Number.isFinite(settings.grain) && settings.grain >= 0.1 && settings.grain <= 2.5) {
+      this.state.grain = settings.grain;
+    }
+    if (Number.isFinite(settings.cursorInfluence) && settings.cursorInfluence >= 0 && settings.cursorInfluence <= 5) {
+      this.state.cursorInfluence = settings.cursorInfluence;
+    }
+    if (Array.isArray(settings.customPalette) && settings.customPalette.length === 3) {
+      this.updateCustomPalette(settings.customPalette, this.state.customPaletteEnabled);
+    }
+    if (typeof settings.customPaletteEnabled === 'boolean') {
+      this.state.customPaletteEnabled = settings.customPaletteEnabled;
+    }
+    if (Array.isArray(settings.customPaletteSlots) && settings.customPaletteSlots.length === 3) {
+      this.state.customPaletteSlots = this.normalizePaletteSlots(settings.customPaletteSlots);
+    }
 
     this.syncUIFromState();
+  }
+
+  beginPaletteEdit() {
+    if (this.paletteEditSnapshot) return;
+    this.paletteEditSnapshot = {
+      colors: this.state.customPalette.slice(),
+      enabled: this.state.customPaletteEnabled
+    };
+  }
+
+  commitPaletteEdit() {
+    this.paletteEditSnapshot = null;
+    this.paletteEditDirty = false;
+    this.syncCustomPaletteInputs();
+  }
+
+  cancelPaletteEdit() {
+    if (!this.paletteEditSnapshot) return;
+    const { colors, enabled } = this.paletteEditSnapshot;
+    this.paletteEditSnapshot = null;
+    this.paletteEditDirty = false;
+    this.updateCustomPalette(colors, enabled);
+  }
+
+  updateCustomPalette(colors, enabled = this.state.customPaletteEnabled) {
+    const defaults = this.getDefaultSettings().customPalette;
+    if (!Array.isArray(colors) || colors.length !== 3) return false;
+    this.state.customPalette = colors.map((color, index) => this.normalizeHexColor(color, defaults[index]));
+    this.state.customPaletteEnabled = enabled === true;
+    this.customPaletteTargetRGB = this.state.customPalette.map((color) => this.hexToRgb(color));
+    this.syncCustomPaletteInputs();
+    return true;
+  }
+
+  syncCustomPaletteInputs() {
+    document.querySelectorAll('.palette-color').forEach((input, index) => {
+      if (this.state.customPalette[index]) input.value = this.state.customPalette[index];
+    });
+    const status = document.getElementById('palette-status');
+    if (status) {
+      status.innerText = '';
+    }
+  }
+
+  syncPaletteSlots() {
+    document.querySelectorAll('.palette-slot').forEach((button, index) => {
+      const saved = this.state.customPaletteSlots[index]?.length === 3;
+      button.classList.toggle('active', this.paletteSlotSelection === index);
+      button.setAttribute('aria-pressed', String(this.paletteSlotSelection === index));
+      const status = button.querySelector('.palette-slot-status');
+      if (status) status.innerText = saved ? '已儲存' : '空白';
+    });
+    const saveButton = document.getElementById('save-palette-slot-btn');
+    if (saveButton && !this.paletteSaveFeedbackTimer) {
+      saveButton.textContent = `儲存至色組${this.paletteSlotSelection + 1}`;
+    }
   }
 
   updateThemeClass() {
@@ -1492,13 +1585,13 @@ class IridescentApp {
 
     const presetBtns = document.querySelectorAll('.preset-btn');
     presetBtns.forEach((b) => {
-      b.classList.toggle('active', parseInt(b.dataset.preset) === index);
+      const isActive = parseInt(b.dataset.preset) === index;
+      b.classList.toggle('active', isActive);
+      b.setAttribute('aria-pressed', String(isActive));
     });
 
     this.updatePresetIndicator(true);
 
-    const presetNames = ['珠光', '微塵', '流雲', '浮光', '琉璃'];
-    this.showToast(presetNames[index]);
   }
 
   updatePresetIndicator(animate = true) {
@@ -1557,12 +1650,7 @@ class IridescentApp {
     }
   }
 
-  setViewMode(mode, silent = false) {
-    if (this.state.hideTimer) {
-      clearTimeout(this.state.hideTimer);
-      this.state.hideTimer = null;
-    }
-
+  setViewMode(mode) {
     const prevMode = this.state.viewMode;
     this.state.viewMode = mode;
     const bottomDock = document.querySelector('.bottom-dock');
@@ -1600,32 +1688,32 @@ class IridescentApp {
       }
     }
 
-    // Toggle active state (changes icon)
-    if (hideButtonsBtn) hideButtonsBtn.classList.toggle('active', mode === 'hide_buttons');
-    if (hideAllBtn) hideAllBtn.classList.toggle('active', mode === 'hide_all');
+    // Toggle active state, accessible name, and icon together.
+    if (hideButtonsBtn) {
+      const active = mode === 'hide_buttons';
+      const label = active ? '顯示按鈕' : '隱藏按鈕';
+      hideButtonsBtn.classList.toggle('active', active);
+      hideButtonsBtn.setAttribute('aria-pressed', String(active));
+      hideButtonsBtn.setAttribute('aria-label', label);
+      hideButtonsBtn.title = label;
+    }
+    if (hideAllBtn) {
+      const active = mode === 'hide_all';
+      const label = active ? '退出全螢幕模式' : '全螢幕模式';
+      hideAllBtn.classList.toggle('active', active);
+      hideAllBtn.setAttribute('aria-pressed', String(active));
+      hideAllBtn.setAttribute('aria-label', label);
+      hideAllBtn.title = label;
+    }
 
     if (mode === 'normal') {
       this.renderTextTexture();
     } else if (mode === 'hide_buttons') {
-      if (this.controlsPanel) {
-        this.controlsPanel.classList.remove('open');
-        const togglePanelBtn = document.getElementById('toggle-panel-btn');
-        if (togglePanelBtn) togglePanelBtn.classList.remove('active');
-      }
+      this.setControlsPanelOpen(false);
       this.renderTextTexture();
-      if (!silent) {
-        this.showToast('專注模式（ESC恢復）');
-      }
     } else if (mode === 'hide_all') {
-      if (this.controlsPanel) {
-        this.controlsPanel.classList.remove('open');
-        const togglePanelBtn = document.getElementById('toggle-panel-btn');
-        if (togglePanelBtn) togglePanelBtn.classList.remove('active');
-      }
+      this.setControlsPanelOpen(false);
       this.renderTextTexture();
-      if (!silent) {
-        this.showToast('全螢幕模式（ESC恢復）');
-      }
     }
   }
 
@@ -1664,7 +1752,6 @@ class IridescentApp {
   toggleUI() {
     if (this.state.viewMode !== 'normal') {
       this.setViewMode('normal');
-      this.showToast('介面已恢復');
       return;
     }
     this.setViewMode('hide_all');
@@ -1677,34 +1764,35 @@ class IridescentApp {
       pauseBtn.classList.toggle('active', this.state.isPaused);
       pauseBtn.title = this.state.isPaused ? '繼續畫面' : '暫停畫面';
       pauseBtn.setAttribute('aria-label', this.state.isPaused ? '繼續畫面' : '暫停畫面');
+      pauseBtn.setAttribute('aria-pressed', String(this.state.isPaused));
     }
     if (this.state.isPaused) {
       this.state.vortexPower = 0;
       this.mouse.vx = 0;
       this.mouse.vy = 0;
-      this.mouse.isDown = false;
-      document.body.classList.remove('interacting');
+      this.stopRenderLoop();
+    } else {
+      this.startRenderLoop();
     }
   }
 
   togglePause() {
     this.setPaused(!this.state.isPaused);
-    this.showToast(this.state.isPaused ? '流動已定格' : '流動已恢復');
   }
 
-  showToast(text) {
-    if (!this.toast) return;
-    this.toast.innerText = text;
-    this.toast.classList.add('show');
-    clearTimeout(this.toastTimeout);
-    this.toastTimeout = setTimeout(() => {
-      this.toast.classList.remove('show');
-    }, 2200);
+  startRenderLoop() {
+    if (this.isRendering || this.contextLost || this.state.isPaused || !this.gl) return;
+    this.isRendering = true;
+    this.rafId = requestAnimationFrame((timestamp) => this.render(timestamp));
+  }
+
+  stopRenderLoop() {
+    if (this.rafId !== null) cancelAnimationFrame(this.rafId);
+    this.rafId = null;
+    this.isRendering = false;
   }
 
   capturePoster() {
-    this.showToast('正在拓印典藏藝術海報...');
-    
     const exportCanvas = document.createElement('canvas');
     const width = this.canvas.width;
     const height = this.canvas.height;
@@ -1720,10 +1808,6 @@ class IridescentApp {
     link.download = `Grand-Modern-Prism-${Date.now()}.png`;
     link.href = exportCanvas.toDataURL('image/png');
     link.click();
-
-    setTimeout(() => {
-      this.showToast('典藏海報已保存至您的下載資料夾！');
-    }, 600);
   }
 
   onResize() {
@@ -1739,8 +1823,13 @@ class IridescentApp {
   }
 
   render(timestamp) {
+    this.rafId = null;
+    if (!this.isRendering || this.contextLost) return;
     const gl = this.gl;
-    if (!gl) return;
+    if (!gl) {
+      this.isRendering = false;
+      return;
+    }
 
     const dt = Math.min((timestamp - this.lastFrameTime) * 0.001, 0.1);
     this.lastFrameTime = timestamp;
@@ -1788,22 +1877,25 @@ class IridescentApp {
       this.state.vortexPower += (targetVortex - this.state.vortexPower) * Math.min(1.0, dt * 6.0);
       if (this.state.vortexPower < 0.001) this.state.vortexPower = 0;
 
-      this.mouse.pressPower *= 0.92;
-      if (this.mouse.pressPower < 0.001) this.mouse.pressPower = 0;
-
-      soundEngine.updateInteraction(this.mouse.x, this.mouse.y, mouseSpeed, this.state.vortexPower);
     } else {
       this.mouse.vx = 0;
       this.mouse.vy = 0;
       this.state.vortexPower = 0;
-      soundEngine.updateInteraction(this.mouse.x, this.mouse.y, 0, 0);
+    }
+
+    // 自訂色組之間平滑過渡，避免切換時整個畫面瞬間跳色
+    const paletteLerp = Math.min(1.0, dt * 6.0);
+    for (let i = 0; i < this.customPaletteRGB.length; i++) {
+      const current = this.customPaletteRGB[i];
+      const target = this.customPaletteTargetRGB[i];
+      for (let channel = 0; channel < 3; channel++) {
+        current[channel] += (target[channel] - current[channel]) * paletteLerp;
+      }
     }
 
     gl.uniform2f(this.uniforms.u_resolution, this.canvas.width, this.canvas.height);
     gl.uniform1f(this.uniforms.u_time, this.time);
     gl.uniform2f(this.uniforms.u_mouse, this.mouse.x, this.mouse.y);
-    gl.uniform2f(this.uniforms.u_mouse_vel, this.mouse.vx, this.mouse.vy);
-
     // 物理擴散水波漣漪數據上載
     for (let i = 0; i < 10; i++) {
       const r = this.ripples[i];
@@ -1823,7 +1915,6 @@ class IridescentApp {
       gl.uniform1i(this.uniforms.u_text_texture, 0);
     }
 
-    gl.uniform1i(this.uniforms.u_preset, this.state.preset);
     if (this.uniforms.u_preset_from) gl.uniform1i(this.uniforms.u_preset_from, this.state.presetFrom);
     if (this.uniforms.u_preset_to) gl.uniform1i(this.uniforms.u_preset_to, this.state.presetTo);
     if (this.uniforms.u_preset_mix) gl.uniform1f(this.uniforms.u_preset_mix, this.state.presetTransition);
@@ -1835,8 +1926,10 @@ class IridescentApp {
     gl.uniform1f(this.uniforms.u_vortex_power, this.state.vortexPower);
     gl.uniform1f(this.uniforms.u_defocus, this.state.defocus);
     gl.uniform1f(this.uniforms.u_contrast, this.state.contrast);
-    gl.uniform1f(this.uniforms.u_light_mode, this.state.lightMode);
-
+    gl.uniform3fv(this.uniforms.u_custom_palette_a, this.customPaletteRGB[0]);
+    gl.uniform3fv(this.uniforms.u_custom_palette_b, this.customPaletteRGB[1]);
+    gl.uniform3fv(this.uniforms.u_custom_palette_c, this.customPaletteRGB[2]);
+    gl.uniform1f(this.uniforms.u_custom_palette_enabled, this.state.customPaletteEnabled ? 1.0 : 0.0);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
     if (!this.hasNotifiedFirstFrame) {
@@ -1846,7 +1939,11 @@ class IridescentApp {
       }
     }
 
-    requestAnimationFrame((t) => this.render(t));
+    if (this.isRendering && !this.state.isPaused && !this.contextLost) {
+      this.rafId = requestAnimationFrame((t) => this.render(t));
+    } else {
+      this.isRendering = false;
+    }
   }
 }
 
@@ -1868,14 +1965,14 @@ window.addEventListener('DOMContentLoaded', () => {
       if (window.appInstance) {
         window.appInstance.updateScreenRole(isMain, mode);
         const hasText = window.appInstance.shouldDisplayText(isMain, mode);
-        window.appInstance.setViewMode(hasText ? 'hide_buttons' : 'hide_all', true);
+        window.appInstance.setViewMode(hasText ? 'hide_buttons' : 'hide_all');
       }
     },
     updateScreenRole: (isMain = true, mode = 'secondary_extend') => {
       if (window.appInstance) {
         window.appInstance.updateScreenRole(isMain, mode);
         const hasText = window.appInstance.shouldDisplayText(isMain, mode);
-        window.appInstance.setViewMode(hasText ? 'hide_buttons' : 'hide_all', true);
+        window.appInstance.setViewMode(hasText ? 'hide_buttons' : 'hide_all');
       }
     },
     setNormalMode: () => {

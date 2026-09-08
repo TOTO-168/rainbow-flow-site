@@ -2,12 +2,10 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GRAND MODERN CHINA // 虹光流序・電子微塵</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Serif+SC:wght@300;400;600&family=Noto+Serif+TC:wght@300;400;600&family=Space+Grotesk:wght@300;400;500&display=swap" rel="stylesheet">
-  <meta name="version" content="1.1.0">
+  <meta name="version" content="1.2.7">
+  <meta name="offline-assets" content="true">
   <link rel="stylesheet" href="style.css">
 </head>
 <body data-theme="paper">
@@ -16,35 +14,7 @@
   <canvas id="gl-canvas"></canvas>
 
 
-  <!-- 提示浮動 Toast -->
-  <div id="toast" class="toast">微光流動・方寸微塵</div>
-
-  <!-- 1. 動態反白排版文字層 (Dynamic Inversion Text Layer) -->
-  <!-- 採用 mix-blend-mode: difference，當深色墨影或虹光流過文字時實時動態反白 -->
-  <div class="inversion-text-layer">
-    
-    <!-- 頂部標題與先鋒元數據 -->
-    <div class="brand-title">
-      <h1 class="brand-main">GRAND MODERN CHINA</h1>
-      <div class="brand-sub">
-        <span>月刊手藝</span>
-        <span class="dot-sep"></span>
-        <span>寫新故事</span>
-        <span class="dot-sep"></span>
-        <span>HOLOGRAPHIC ARCHIVE</span>
-      </div>
-    </div>
-
-    <!-- 右側垂直詩意文本 (直排東方先鋒編排 - 極簡凝練) -->
-    <aside class="poetry-container">
-      <div class="poem-line">虹光流動成詩</div>
-      <div class="poem-line">方寸微塵相生</div>
-      <div class="poem-annotation">PRISM // 2026</div>
-    </aside>
-
-  </div>
-
-  <!-- 2. 互動控制與面板層 (Interactive Controls Layer) -->
+  <!-- 互動控制與面板層 (Interactive Controls Layer) -->
   <!-- 採用高清晰深色玻璃擬態，確保按鈕在任何背景下均清晰可讀 -->
   <div class="controls-layer">
 
@@ -54,17 +24,17 @@
       <!-- 藝術風格切換 -->
       <div class="preset-switcher">
         <div class="preset-pill-indicator"></div>
-        <button class="preset-btn active" data-preset="0">珠光</button>
-        <button class="preset-btn" data-preset="1">微塵</button>
-        <button class="preset-btn" data-preset="2">流雲</button>
-        <button class="preset-btn" data-preset="3">浮光</button>
-        <button class="preset-btn" data-preset="4">琉璃</button>
+        <button class="preset-btn active" data-preset="0" type="button" aria-pressed="true">珠光</button>
+        <button class="preset-btn" data-preset="1" type="button" aria-pressed="false">微塵</button>
+        <button class="preset-btn" data-preset="2" type="button" aria-pressed="false">流雲</button>
+        <button class="preset-btn" data-preset="3" type="button" aria-pressed="false">浮光</button>
+        <button class="preset-btn" data-preset="4" type="button" aria-pressed="false">琉璃</button>
       </div>
 
       <!-- 操作按鈕 -->
       <div class="dock-actions-container" id="dock-actions-container">
         <div class="dock-actions">
-          <button id="hide-buttons-btn" class="action-btn" aria-label="隱藏按鈕" title="隱藏按鈕 (保留文字)">
+          <button id="hide-buttons-btn" class="action-btn" type="button" aria-label="隱藏按鈕" aria-pressed="false" title="隱藏按鈕">
             <svg class="icon-eye" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
               <circle cx="12" cy="12" r="3"></circle>
@@ -75,7 +45,7 @@
             </svg>
           </button>
 
-          <button id="hide-all-btn" class="action-btn" aria-label="全螢幕模式" title="全螢幕模式 (隱藏按鈕與文字)">
+          <button id="hide-all-btn" class="action-btn" type="button" aria-label="全螢幕模式" aria-pressed="false" title="全螢幕模式">
             <svg class="icon-maximize" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="15 3 21 3 21 9"></polyline>
               <polyline points="9 21 3 21 3 15"></polyline>
@@ -90,7 +60,7 @@
             </svg>
           </button>
 
-          <button id="pause-btn" class="action-btn" aria-label="暫停畫面" title="暫停畫面">
+          <button id="pause-btn" class="action-btn" type="button" aria-label="暫停畫面" aria-pressed="false" title="暫停畫面">
             <svg class="icon-pause" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="6" y="4" width="4" height="16"></rect>
               <rect x="14" y="4" width="4" height="16"></rect>
@@ -100,7 +70,7 @@
             </svg>
           </button>
 
-          <button id="capture-btn" class="action-btn" aria-label="典藏海報" title="典藏海報">
+          <button id="capture-btn" class="action-btn" type="button" aria-label="典藏海報" title="典藏海報">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
               <circle cx="12" cy="13" r="4"></circle>
@@ -108,7 +78,7 @@
           </button>
 
           <div class="panel-anchor-wrapper">
-            <button id="toggle-panel-btn" class="action-btn" aria-label="調校細節" title="調校細節">
+            <button id="toggle-panel-btn" class="action-btn" type="button" aria-label="設定" title="設定" aria-expanded="false" aria-controls="controls-panel">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="4" y1="6" x2="20" y2="6"></line>
                 <line x1="4" y1="12" x2="20" y2="12"></line>
@@ -117,57 +87,112 @@
             </button>
 
             <!-- 參數微調抽屜面板 (Controls Drawer - 展開於按鈕正上方) -->
-            <div id="controls-panel" class="controls-panel">
+            <div id="controls-panel" class="controls-panel" role="dialog" aria-modal="false" aria-labelledby="controls-panel-title" aria-hidden="true" inert>
               <div class="panel-header">
-                <span class="panel-title">光流與塵埃微調</span>
+                <h2 id="controls-panel-title" class="panel-title">設定</h2>
               </div>
 
               <div class="slider-group">
-                <div class="slider-item">
-                  <div class="slider-label-row">
-                    <span>流動節奏 (Flow Speed)</span>
-                    <span id="val-speed" class="slider-val">0.6</span>
-                  </div>
-                  <input type="range" id="slider-speed" class="custom-range" min="0.1" max="2.5" step="0.1" value="0.6">
-                </div>
+                <section class="settings-section" aria-labelledby="effects-section-title">
+                  <h3 id="effects-section-title" class="settings-section-title">效果調整</h3>
+                  <div class="settings-section-controls">
+                    <div class="slider-item">
+                      <div class="slider-label-row">
+                        <label for="slider-speed">流動節奏</label>
+                        <span id="val-speed" class="slider-val">0.6</span>
+                      </div>
+                      <input type="range" id="slider-speed" class="custom-range" min="0.1" max="2.5" step="0.1" value="0.6">
+                    </div>
 
-                <div class="slider-item">
-                  <div class="slider-label-row">
-                    <span>光學色散 (Dispersion)</span>
-                    <span id="val-dispersion" class="slider-val">1.2</span>
-                  </div>
-                  <input type="range" id="slider-dispersion" class="custom-range" min="0.0" max="3.0" step="0.1" value="1.2">
-                </div>
+                    <div class="slider-item">
+                      <div class="slider-label-row">
+                        <label for="slider-dispersion">光學色散</label>
+                        <span id="val-dispersion" class="slider-val">1.2</span>
+                      </div>
+                      <input type="range" id="slider-dispersion" class="custom-range" min="0.0" max="3.0" step="0.1" value="1.2">
+                    </div>
 
-                <div class="slider-item">
-                  <div class="slider-label-row">
-                    <span>微塵質地 (Stardust Grain)</span>
-                    <span id="val-grain" class="slider-val">0.6</span>
-                  </div>
-                  <input type="range" id="slider-grain" class="custom-range" min="0.1" max="2.5" step="0.1" value="0.6">
-                </div>
+                    <div class="slider-item">
+                      <div class="slider-label-row">
+                        <label for="slider-grain">微塵質地</label>
+                        <span id="val-grain" class="slider-val">0.6</span>
+                      </div>
+                      <input type="range" id="slider-grain" class="custom-range" min="0.1" max="2.5" step="0.1" value="0.6">
+                    </div>
 
-                <div class="slider-item">
-                  <div class="slider-label-row">
-                    <span>游標影響力 (Cursor Influence)</span>
-                    <span id="val-cursor" class="slider-val">0.1</span>
+                    <div class="slider-item">
+                      <div class="slider-label-row">
+                        <label for="slider-cursor">游標影響力</label>
+                        <span id="val-cursor" class="slider-val">0.2</span>
+                      </div>
+                      <input type="range" id="slider-cursor" class="custom-range" min="0.0" max="5.0" step="0.1" value="0.2">
+                    </div>
                   </div>
-                  <input type="range" id="slider-cursor" class="custom-range" min="0.0" max="5.0" step="0.1" value="0.1">
-                </div>
+                </section>
 
-                <div class="slider-item">
-                  <div class="slider-label-row">
-                    <span>底色意境 (Canvas Base)</span>
+                <section class="settings-section" aria-labelledby="background-section-title">
+                  <h3 id="background-section-title" class="settings-section-title">背景意境</h3>
+                  <div class="slider-item">
+                    <div id="background-mode-label" class="sr-only">背景意境</div>
+                    <div class="bg-mode-selector" role="group" aria-labelledby="background-mode-label">
+                      <div class="bg-pill-indicator"></div>
+                      <button class="bg-btn" data-mode="0" type="button" aria-pressed="false">水墨</button>
+                      <button class="bg-btn" data-mode="1" type="button" aria-pressed="false">玄黑</button>
+                      <button class="bg-btn" data-mode="2" type="button" aria-pressed="false">紙白</button>
+                      <button class="bg-btn active" data-mode="3" type="button" aria-pressed="true">黛藍</button>
+                      <button class="bg-btn" data-mode="4" type="button" aria-pressed="false">赤霞</button>
+                    </div>
                   </div>
-                  <div class="bg-mode-selector">
-                    <div class="bg-pill-indicator"></div>
-                    <button class="bg-btn active" data-mode="0">水墨</button>
-                    <button class="bg-btn" data-mode="1">玄黑</button>
-                    <button class="bg-btn" data-mode="2">紙白</button>
-                    <button class="bg-btn" data-mode="3">黛藍</button>
-                    <button class="bg-btn" data-mode="4">赤霞</button>
+                </section>
+
+                <section class="settings-section" aria-labelledby="palette-section-title">
+                  <h3 id="palette-section-title" class="settings-section-title">色彩</h3>
+                  <div class="palette-editor">
+                    <div class="slider-label-row">
+                      <span>自訂色盤</span>
+                      <span id="palette-status" class="slider-val"></span>
+                    </div>
+                    <div class="palette-editor-row">
+                      <div class="palette-colors">
+                        <label class="palette-color-wrap" title="色盤色彩一">
+                          <input class="palette-color" type="color" value="#ff5a82" aria-label="色盤色彩一">
+                        </label>
+                        <label class="palette-color-wrap" title="色盤色彩二">
+                          <input class="palette-color" type="color" value="#28c3ff" aria-label="色盤色彩二">
+                        </label>
+                        <label class="palette-color-wrap" title="色盤色彩三">
+                          <input class="palette-color" type="color" value="#a04bff" aria-label="色盤色彩三">
+                        </label>
+                      </div>
+                      <div class="palette-actions">
+                        <button id="apply-palette-btn" class="panel-tool-btn" type="button">套用</button>
+                        <button id="reset-palette-btn" class="panel-tool-btn" type="button">恢復</button>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                </section>
+
+                <section class="settings-section" aria-labelledby="palette-slots-section-title">
+                  <h3 id="palette-slots-section-title" class="settings-section-title">色組記憶</h3>
+                  <div class="palette-slots-editor">
+                    <div class="palette-slot-grid">
+                      <button class="palette-slot" data-slot="0" type="button" aria-pressed="true">
+                        <span class="palette-slot-name">色組一</span>
+                        <span class="palette-slot-status">空白</span>
+                      </button>
+                      <button class="palette-slot" data-slot="1" type="button" aria-pressed="false">
+                        <span class="palette-slot-name">色組二</span>
+                        <span class="palette-slot-status">空白</span>
+                      </button>
+                      <button class="palette-slot" data-slot="2" type="button" aria-pressed="false">
+                        <span class="palette-slot-name">色組三</span>
+                        <span class="palette-slot-status">空白</span>
+                      </button>
+                    </div>
+                    <button id="save-palette-slot-btn" class="panel-tool-btn" type="button">儲存至色組1</button>
+                  </div>
+                </section>
+
               </div>
             </div>
           </div>

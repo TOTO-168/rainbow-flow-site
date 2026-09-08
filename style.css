@@ -3,12 +3,11 @@
    設計風格：當代先鋒東方美學 (Avant-Garde Editorial Luxury)
    ========================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Serif+SC:wght@300;400;600&family=Noto+Serif+TC:wght@300;400;600&family=Space+Grotesk:wght@300;400;500&display=swap');
-
 :root {
-  --font-serif: 'Cinzel', 'Noto Serif TC', 'Noto Serif SC', 'Songti SC', 'STSong', 'PMingLiU', serif;
-  --font-chinese-serif: 'Noto Serif TC', 'Noto Serif SC', 'Songti SC', 'STSong', 'PMingLiU', serif;
-  --font-body: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  /* macOS 內建字體：不依賴 Google Fonts，離線時仍保持完整排版。 */
+  --font-serif: 'Hiragino Mincho ProN', 'Songti SC', 'STSong', 'PMingLiU', serif;
+  --font-chinese-serif: 'Hiragino Mincho ProN', 'Songti SC', 'STSong', 'PMingLiU', serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', sans-serif;
   --color-dark: #090a0f;
   --color-light: #f5f5f7;
   --color-accent: #6ee7b7;
@@ -120,97 +119,7 @@ html, body {
 
 
 /* ==========================================================================
-   1. 動態反白文字層 (Dynamic Inversion Text Layer)
-   利用 mix-blend-mode: difference 實現當流光、墨影經過時動態反白與高對比折射
-   ========================================================================== */
-.inversion-text-layer {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  pointer-events: none;
-  z-index: 10;
-  opacity: 0;
-  visibility: hidden;
-}
-
-/* 頂部標題 - Y軸置中 */
-.brand-title {
-  position: fixed;
-  top: 50%;
-  transform: translateY(-50%);
-  left: 3.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  pointer-events: auto;
-  color: #ffffff;
-}
-
-.brand-main {
-  font-family: var(--font-serif);
-  font-size: 1.35rem;
-  letter-spacing: 0.48em;
-  text-transform: uppercase;
-  font-weight: 600;
-  color: #ffffff;
-}
-
-.brand-sub {
-  font-family: var(--font-chinese-serif);
-  font-size: 0.72rem;
-  letter-spacing: 0.35em;
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  opacity: 0.85;
-}
-
-.brand-sub .dot-sep {
-  width: 3px;
-  height: 3px;
-  background-color: #ffffff;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-/* 垂直詩詞與理念表達 (Vertical Editorial Typography) */
-.poetry-container {
-  position: fixed;
-  right: 3.5rem;
-  top: 25%;
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  pointer-events: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2.4rem;
-  color: #ffffff;
-}
-
-.poem-line {
-  font-family: var(--font-chinese-serif);
-  font-size: 1.22rem;
-  font-weight: 400;
-  letter-spacing: 0.55em;
-  color: #ffffff;
-  position: relative;
-  line-height: 1.6;
-}
-
-.poem-annotation {
-  font-size: 0.65rem;
-  letter-spacing: 0.25em;
-  color: #ffffff;
-  font-family: monospace;
-  opacity: 0.75;
-  margin-top: 0.49rem;
-}
-
-/* ==========================================================================
-   2. 互動控制層 (Interactive Controls Layer)
+   1. 互動控制層 (Interactive Controls Layer)
    採用實體深色玻璃擬態，獨立於反白層，確保操作按鈕恆常清晰可讀
    ========================================================================== */
 .controls-layer {
@@ -225,43 +134,15 @@ html, body {
   flex-direction: column;
   justify-content: flex-end;
   padding: 2.5rem 3.5rem;
+  font-family: var(--font-body);
 }
 
-.controls-layer.hidden-ui {
-  opacity: 0;
-  pointer-events: none !important;
-}
-
-.meta-badge {
-  font-size: 0.7rem;
-  font-family: monospace;
-  letter-spacing: 0.15em;
-  padding: 0.45rem 0.95rem;
-  border: 1px solid var(--glass-border-color);
-  background: var(--glass-frosted-bg);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-radius: 999px;
-  color: var(--glass-text-color);
-  transition: all 0.3s ease;
-  box-shadow: var(--glass-dispersion-shadow);
-}
-
-.btn-interactive {
-  cursor: pointer;
-  pointer-events: auto;
-}
-
-.btn-interactive:hover {
-  background: var(--glass-frosted-bg-hover);
-  box-shadow: var(--glass-dispersion-shadow-hover);
-  transform: translateY(-1px);
-}
-
-.sound-btn.active {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
-  box-shadow: 0 0 16px rgba(110, 231, 183, 0.35);
+.controls-layer button,
+.controls-layer input,
+.controls-layer select,
+.controls-layer textarea {
+  font-family: inherit;
+  touch-action: manipulation;
 }
 
 /* 底部互動控制欄 (Interactive Controls Dock) */
@@ -374,8 +255,8 @@ html, body {
   animation: dockSlideUp 0.42s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both;
 }
 
-.bottom-dock.dock-spring-in .dock-actions > *:nth-child(5) {
-  animation: dockSlideUp 0.42s cubic-bezier(0.16, 1, 0.3, 1) 0.10s both;
+.bottom-dock.dock-spring-in .dock-actions > .panel-anchor-wrapper {
+  animation: dockSlideUp 0.42s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both;
 }
 
 @keyframes dockSlideUp {
@@ -456,6 +337,7 @@ body[data-theme="dark"] .preset-pill-indicator {
   font-family: var(--font-body);
   font-size: 0.75rem;
   letter-spacing: 0.08em;
+  min-height: 44px;
   padding: 0.46rem 1.05rem;
   border-radius: 999px;
   cursor: pointer;
@@ -544,8 +426,8 @@ body[data-theme="dark"] .preset-btn.active {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border-radius: 50%;
   border: 1px solid var(--glass-border-color);
@@ -621,11 +503,16 @@ body[data-theme="dark"] #toggle-panel-btn.active {
   bottom: calc(100% + 0.85rem);
   left: auto;
   right: 0;
-  transform: translateY(14px) scale(0.95);
+  /* Keep the drawer in a simple translated layer.  WKWebView uses the
+     unscaled anchor rect when it presents native controls (such as the
+     macOS color well); an ancestor scale makes that rect drift and can flip
+     the popover arrow. */
+  transform: translateY(14px);
   transform-origin: calc(100% - 20px) bottom;
   width: 330px;
   max-height: calc(100vh - 8.5rem);
   overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--glass-border-color);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.84) 0%, rgba(255, 255, 255, 0.62) 100%);
   backdrop-filter: blur(28px) saturate(180%);
@@ -634,10 +521,12 @@ body[data-theme="dark"] #toggle-panel-btn.active {
   padding: 1.6rem 1.7rem;
   z-index: 50;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
   transition: 
     opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1),
     transform 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0.35s,
     box-shadow 0.35s ease;
   box-shadow:
     var(--glass-dispersion-shadow),
@@ -655,7 +544,8 @@ body[data-theme="dark"] .controls-panel {
 
 .controls-panel.open {
   opacity: 1;
-  transform: translateY(0) scale(1);
+  visibility: visible;
+  transform: translateY(0);
   pointer-events: auto;
 }
 
@@ -693,46 +583,38 @@ body[data-theme="dark"] .panel-header {
   color: var(--glass-text-color);
 }
 
-.panel-close {
-  background: rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--glass-text-muted);
-  font-size: 0.85rem;
-  cursor: pointer;
-  padding: 0;
-  outline: none;
-  transition: all 0.25s ease;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
-body[data-theme="dark"] .panel-close {
-  background: rgba(255, 255, 255, 0.10);
-  border-color: rgba(255, 255, 255, 0.18);
-  color: rgba(255, 255, 255, 0.75);
-}
-
-.panel-close:hover {
-  color: var(--glass-text-color);
-  background: rgba(0, 0, 0, 0.1);
-  transform: scale(1.1);
-}
-
-body[data-theme="dark"] .panel-close:hover {
-  background: rgba(255, 255, 255, 0.22);
-  color: #ffffff;
-}
-
 .slider-group {
   display: flex;
   flex-direction: column;
-  gap: 1.2rem;
+  gap: 1.35rem;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.settings-section + .settings-section {
+  padding-top: 1rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+body[data-theme="dark"] .settings-section + .settings-section {
+  border-top-color: rgba(255, 255, 255, 0.12);
+}
+
+.settings-section-title {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--glass-text-muted);
+}
+
+.settings-section-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
 }
 
 .slider-item {
@@ -749,8 +631,12 @@ body[data-theme="dark"] .panel-close:hover {
   color: var(--glass-text-muted);
 }
 
+.slider-label-row label {
+  cursor: pointer;
+}
+
 .slider-val {
-  font-family: monospace;
+  font-family: inherit;
   font-weight: 600;
   color: var(--glass-text-color);
 }
@@ -763,13 +649,23 @@ body[data-theme="dark"] .slider-val {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 4px;
-  background: rgba(0, 0, 0, 0.10);
+  height: 28px;
+  background: transparent;
   border-radius: 2px;
   outline: none;
 }
 
 body[data-theme="dark"] .custom-range {
+  background: transparent;
+}
+
+.custom-range::-webkit-slider-runnable-track {
+  height: 4px;
+  background: rgba(0, 0, 0, 0.10);
+  border-radius: 2px;
+}
+
+body[data-theme="dark"] .custom-range::-webkit-slider-runnable-track {
   background: rgba(255, 255, 255, 0.18);
 }
 
@@ -781,6 +677,7 @@ body[data-theme="dark"] .custom-range {
   border-radius: 50%;
   background: #ffffff;
   cursor: pointer;
+  margin-top: -5px;
   box-shadow: 
     -0.5px -0.5px 2px rgba(255, 90, 130, 0.25),
     0.5px 0.5px 2px rgba(40, 195, 255, 0.25),
@@ -795,7 +692,7 @@ body[data-theme="dark"] .custom-range {
 .bg-mode-selector {
   position: relative;
   display: flex;
-  gap: 0.22rem;
+  gap: 0.35rem;
   margin-top: 0.8rem;
   background: rgba(0, 0, 0, 0.04);
   padding: 0.25rem;
@@ -848,6 +745,7 @@ body[data-theme="dark"] .bg-pill-indicator {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-height: 44px;
   padding: 0.42rem 0.12rem;
   background: transparent;
   border: 1px solid transparent;
@@ -895,34 +793,162 @@ body[data-theme="dark"] .bg-btn.active {
   box-shadow: none;
 }
 
-/* ==========================================================================
-   提示小標籤 (Toast with Pure Colorless Glass & 1px Dispersion Rim)
-   ========================================================================== */
-.toast {
-  position: fixed;
-  top: calc(2rem + 1vh);
-  left: 50%;
-  transform: translateX(-50%) translateY(-20px);
-  border: 1px solid var(--glass-border-color);
-  background: var(--glass-frosted-bg);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  color: var(--glass-text-color);
-  padding: 0.6rem 1.4rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  letter-spacing: 0.1em;
-  opacity: 0;
-  pointer-events: none;
-  z-index: 900;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: var(--glass-dispersion-shadow);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+.palette-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding-top: 0.2rem;
 }
 
-.toast.show {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
+.palette-editor-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.palette-colors {
+  display: flex;
+  gap: 0.65rem;
+  flex: 0 0 auto;
+}
+
+.palette-color-wrap {
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 44px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.palette-color {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  display: block;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  border-radius: 8px;
+  overflow: hidden;
+  outline: none;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.palette-color::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.palette-color::-webkit-color-swatch {
+  border: 0 !important;
+  border-radius: 8px;
+}
+
+.palette-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.palette-editor-row .palette-actions {
+  flex: 1;
+  min-width: 0;
+}
+
+.palette-slots-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding-top: 0.2rem;
+}
+
+.palette-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.palette-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0.45rem 0.35rem;
+  border: 1px solid var(--glass-border-color);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--glass-text-muted);
+  font: inherit;
+  font-size: 0.64rem;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.palette-slot:hover,
+.palette-slot.active {
+  border-color: rgba(255, 255, 255, 0.96);
+  background: var(--glass-frosted-bg-hover);
+  color: var(--glass-text-color);
+}
+
+.palette-slot:focus-visible {
+  outline-color: rgba(255, 255, 255, 0.96);
+}
+
+.palette-slot-name,
+.palette-slot-status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-slot-status {
+  font-size: 0.58rem;
+  opacity: 0.75;
+}
+
+.panel-tool-btn {
+  flex: 1;
+  min-height: 44px;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--glass-border-color);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--glass-text-color);
+  font: inherit;
+  font-size: 0.68rem;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.controls-layer button:focus-visible,
+.controls-layer input:focus-visible,
+.palette-color-wrap:focus-within {
+  outline: 2px solid rgba(255, 255, 255, 0.96);
+  outline-offset: 3px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.panel-tool-btn:hover {
+  background: var(--glass-frosted-bg-hover);
+  transform: translateY(-1px);
 }
 
 /* ==========================================================================
@@ -931,21 +957,6 @@ body[data-theme="dark"] .bg-btn.active {
 @media (max-width: 900px) {
   .controls-layer {
     padding: 1.8rem 1.5rem;
-  }
-  
-  .brand-title {
-    top: 50%;
-    transform: translateY(-50%);
-    left: 1.5rem;
-  }
-  
-  .poetry-container {
-    display: none;
-  }
-  
-  .brand-main {
-    font-size: 1.1rem;
-    letter-spacing: 0.35em;
   }
   
   .preset-switcher {
@@ -963,12 +974,21 @@ body[data-theme="dark"] .bg-btn.active {
     right: 1.2rem;
     width: auto;
     bottom: 5.5rem;
-    transform: translateY(14px) scale(0.96);
+    transform: translateY(14px);
     transform-origin: center bottom;
   }
 
   .controls-panel.open {
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .controls-layer * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
@@ -977,8 +997,6 @@ body[data-theme="dark"] .bg-btn.active {
    副螢幕隱藏底部操作欄、抽屜面板與提示，呈現極致純淨的延伸氛圍
    ========================================================================== */
 body.satellite-screen .bottom-dock,
-body.satellite-screen .controls-panel,
-body.satellite-screen .toast {
+body.satellite-screen .controls-panel {
   display: none !important;
 }
-
