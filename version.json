@@ -1,5 +1,5 @@
 {
-  "version": "1.2.15",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.15/RainbowFlow.zip",
-  "notes": "修正設定記憶：滑桿變更會立即保存，重開或更新後保留最新設定；並強化螢幕閒置啟動邏輯。"
+  "version": "1.2.16",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.16/RainbowFlow.zip",
+  "notes": "修正設定保存時序、多螢幕設定同步、畫面程序恢復，以及更新結果通知未完成時的處理。"
 }
