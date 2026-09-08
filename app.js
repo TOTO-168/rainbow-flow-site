@@ -23,7 +23,8 @@ const fragmentShaderSource = `
   uniform vec2 u_resolution;
   uniform float u_time;
   uniform vec2 u_mouse;
-  uniform vec4 u_ripples[10];
+  uniform vec4 u_ripples_a[20];
+  uniform vec4 u_ripples_b[20];
   uniform sampler2D u_text_texture;
 
   // 控制參數
@@ -416,77 +417,141 @@ const fragmentShaderSource = `
     );
 
     // ----------------------------------------------------------------------
-    // 有機流體自然漫射水波系統 (Organic Viscous Liquid Ripple Propagation)
-    // 悠緩自然、具備流體黏滯阻尼與立體光影，呈現晶瑩立體的真實水面起伏
+    // ----------------------------------------------------------------------
+    // 有機流體自然漫射水波與柔順拖曳航跡系統 (Organic Liquid Ripple & Soft Fluid Wake)
+    // 消除生硬中線，呈現寬潤自然、平滑流動的水面推浪質感
     // ----------------------------------------------------------------------
     vec2 rippleDisplace = vec2(0.0);
     float rippleShimmer = 0.0;
     const vec2 ripLightDir = vec2(-0.5547, 0.8320); // 來自左上方的自然環境主光源方向
 
-    for (int i = 0; i < 10; i++) {
-      float birthTime = u_ripples[i].z;
+    // 柔和水槽寬度 (溫潤自然的航跡核心寬度，消除生硬細線)
+    const float coreWidth = 0.034;
+
+    for (int i = 0; i < 20; i++) {
+      float strength = u_ripples_a[i].w;
+      if (strength <= 0.001) continue;
+
+      float tA = u_ripples_a[i].z;
+      float tB = u_ripples_b[i].z;
+      float isSeg = u_ripples_b[i].w;
+
+      vec2 posA = (u_ripples_a[i].xy - 0.5) * aspect;
+      vec2 posB = (u_ripples_b[i].xy - 0.5) * aspect;
+
+      float h = 0.0;
+      vec2 closestP = posA;
+      vec2 ab = posB - posA;
+      float lenAB = length(ab);
+      float tailFade = 1.0;
+
+      // 若為連續拖曳段，精確計算主體航跡與尾端真實擴散扇區 (V-Wake Flaring Dispersion)
+      if (isSeg > 0.5 && lenAB > 0.0005) {
+        vec2 uDir = ab / lenAB;
+        vec2 vDir = vec2(-uDir.y, uDir.x);
+        vec2 pRel = p - posA;
+        float projLong = dot(pRel, uDir);
+        float proj = projLong / lenAB;
+
+        if (proj >= 0.0) {
+          // 航跡主體與前進頭部
+          h = min(proj, 1.0);
+          closestP = posA + h * ab;
+        } else {
+          // 尾端擴散扇區：徹底破除圓弧形穹頂，如真實尾波般向後、向外呈 V 字形展開消散
+          float backDist = -projLong; // 沿反方向向後的距離 (> 0)
+          float latDist = abs(dot(pRel, vDir));
+          float latSign = (dot(pRel, vDir) >= 0.0) ? 1.0 : -1.0;
+
+          // 尾波向兩側展開的擴散率 (~27 度扇形開口)
+          float flareRate = 0.52;
+          float flareOffset = backDist * flareRate;
+          closestP = posA + (vDir * latSign) * flareOffset;
+
+          // 尾部中央破除閉合圓弧（中軸不閉合，向外散開）
+          float tailCenterOpen = smoothstep(0.002, coreWidth * 1.6, latDist + flareOffset * 0.8);
+          // 沿擴散方向溫潤消散融於水面 (延展 20% 散逸長度)
+          tailFade = exp(-pow(backDist / 0.192, 1.7)) * tailCenterOpen;
+          h = 0.0;
+        }
+      }
+
+      float birthTime = mix(tA, tB, h);
       float age = u_time - birthTime;
 
-      if (age >= 0.0 && age < 4.2) {
-        vec2 ripCenter = (u_ripples[i].xy - 0.5) * aspect;
-        vec2 deltaP = p - ripCenter;
-        float dist = length(deltaP);
+      if (age >= 0.0 && age < 4.8) {
+        vec2 deltaP = p - closestP;
+        float rawDist = length(deltaP);
+
+        // 柔化中心線：利用雙曲平滑半徑，將中心尖銳折痕轉化為柔和寬潤的自然水槽 (U-shaped furrow)
+        float dist = (isSeg > 0.5)
+          ? sqrt(rawDist * rawDist + coreWidth * coreWidth) - coreWidth * 0.35
+          : rawDist;
 
         // 空間流場微擾 (純空間微擾破除幾何死板感，不引入角度諧波，無旋轉與葉瓣感)
-        float fluidPerturb = snoise(deltaP * 2.4 + birthTime * 0.15) * 0.016;
+        float fluidPerturb = snoise(deltaP * 2.2 + birthTime * 0.15) * 0.016;
         float organicDist = dist + fluidPerturb * smoothstep(0.03, 0.40, dist);
 
-        // 悠緩溫潤的傳播速度 (約 4.2 秒緩慢舒展漫遊)
+        // 傳播速度與波前半徑 (拖曳時起始帶有寬潤基礎波寬)
         float waveSpeed = 0.28;
-        float waveRadius = age * waveSpeed;
+        float baseRadius = (isSeg > 0.5) ? (coreWidth * 0.65) : 0.0;
+        float waveRadius = baseRadius + age * waveSpeed;
         float deltaDist1 = organicDist - waveRadius;
 
         // 因果性平滑過渡：波前未受擾動水面維持靜謐
-        float causality = 1.0 - smoothstep(-0.04, 0.04, deltaDist1);
+        float causality = 1.0 - smoothstep(-0.045, 0.045, deltaDist1);
 
-        // 1. 第一道主波 (Outer Primary Crest)
-        float packetWidth1 = 0.078 + age * 0.045;
-        float env1 = exp(-pow(deltaDist1 / packetWidth1, 2.0) * 3.5) * causality;
-        float phase1 = deltaDist1 * 26.0;
-        float wave1 = (cos(phase1) + 0.22 * cos(phase1 * 2.0)) * env1;
+        // 1. 第一道主波 (Outer Primary Crest) - 寬波形、柔舒展開
+        float packetWidth1 = 0.088 + age * 0.048;
+        float env1 = exp(-pow(deltaDist1 / packetWidth1, 2.0) * 3.0) * causality;
+        float phase1 = deltaDist1 * 22.0; // 略微放緩頻率，讓水波更舒展寬厚大氣
+        float wave1 = (cos(phase1) + 0.20 * cos(phase1 * 2.0)) * env1;
         float slope1 = -sin(phase1) * env1;
 
         // 2. 第二道次波 (Inner Secondary Rebound Crest - 隨中心反彈水柱自然激發)
-        float waveSpacing = 0.096 + age * 0.022; // 隨擴散自然微幅展開的雙波間距
+        float waveSpacing = 0.105 + age * 0.024;
         float deltaDist2 = deltaDist1 + waveSpacing;
-        float wave2Birth = smoothstep(0.12, 0.40, age); // 撞擊後約 0.12~0.4 秒自然回彈湧現
-        float packetWidth2 = 0.082 + age * 0.048;
-        float env2 = exp(-pow(deltaDist2 / packetWidth2, 2.0) * 3.5) * wave2Birth;
-        float phase2 = deltaDist2 * 26.0;
-        float wave2 = (cos(phase2) + 0.22 * cos(phase2 * 2.0)) * env2 * 0.65;
-        float slope2 = -sin(phase2) * env2 * 0.65;
+        float wave2Birth = smoothstep(0.10, 0.38, age);
+        float packetWidth2 = 0.092 + age * 0.050;
+        float env2 = exp(-pow(deltaDist2 / packetWidth2, 2.0) * 3.0) * wave2Birth;
+        float phase2 = deltaDist2 * 22.0;
+        float wave2 = (cos(phase2) + 0.20 * cos(phase2 * 2.0)) * env2 * 0.60;
+        float slope2 = -sin(phase2) * env2 * 0.60;
 
         // 雙波複合總波幅與法線斜率
         float wave = wave1 + wave2;
         float totalSlope = slope1 + slope2;
 
         // 雙重物理黏滯消散：
-        // 1. 雙曲阻尼與長效平滑衰減 (初期舒緩起伏，悠長漫延後自然化入虛無)
-        float timeFade = (1.0 - smoothstep(0.0, 4.2, age)) * (1.0 / (1.0 + age * 0.65));
-        // 2. 圓形波能量自然擴散衰減 (1/sqrt(r))
-        float geoFade = 1.0 / sqrt(max(dist, 0.04) * 3.2 + 0.65);
+        // 1. 雙曲阻尼與長效平滑衰減 (延展 20% 存續時間與傳播距離)
+        float timeFade = (1.0 - smoothstep(0.0, 4.8, age)) * (1.0 / (1.0 + age * 0.54));
+        // 2. 能量自然擴散衰減 (1/sqrt(r))
+        float geoFade = 1.0 / sqrt(max(dist, 0.04) * 2.8 + 0.7);
 
-        float amp = wave * timeFade * geoFade * u_ripples[i].w;
+        // 兩端過渡羽化 (消除線段接縫硬感)
+        float segmentFeather = 1.0;
+        if (isSeg > 0.5) {
+          segmentFeather = smoothstep(0.0, 0.18, h) * smoothstep(1.0, 0.82, h);
+          segmentFeather = mix(0.75, 1.0, segmentFeather);
+        }
 
-        // 純物理徑向推移：微幅強化透鏡折射深度
-        vec2 dir = (dist > 0.0005) ? (deltaP / dist) : vec2(0.0);
+        float amp = wave * timeFade * geoFade * strength * segmentFeather * tailFade;
+
+        // 中心平滑衰退：在中心線 rawDist -> 0 處平滑過渡至 0，徹底消滅中心刺眼細線
+        float centerFade = (isSeg > 0.5) ? smoothstep(0.002, coreWidth * 1.4, rawDist) : 1.0;
+        vec2 dir = (rawDist > 0.0005) ? (deltaP / rawDist) * centerFade : vec2(0.0);
         rippleDisplace -= dir * (amp * 0.034);
 
-        // 雙重波紋立體光影（法線受光＋柔潤水光高光）
-        float slope = totalSlope * timeFade * geoFade * u_ripples[i].w;
+        // 雙重波紋立體光影（高光聚焦於兩側水脊，中心維持通透平滑）
+        float slope = totalSlope * timeFade * geoFade * strength * segmentFeather * centerFade * tailFade;
         float lightDot = dot(dir, ripLightDir);
         float shade3D = slope * (0.08 + lightDot * 0.12);
-        float specular = pow(max(0.0, lightDot * 0.5 + 0.5), 3.0) * max(0.0, slope) * 0.11;
+        float specular = pow(max(0.0, lightDot * 0.5 + 0.5), 3.0) * max(0.0, slope) * 0.12;
         rippleShimmer += shade3D + specular;
       }
     }
 
-    twistedP += rippleDisplace;
+    twistedP += clamp(rippleDisplace, vec2(-0.06), vec2(0.06));
 
     float t = u_time * u_flow_speed * 0.28;
     float disp = u_dispersion * 0.05;
@@ -569,8 +634,9 @@ const fragmentShaderSource = `
     // ----------------------------------------------------------------------
     // 水面物理折射微光光影 (Natural Fluid Caustics & Shimmer)
     // ----------------------------------------------------------------------
-    vec3 shimmerLight = vec3(rippleShimmer * 0.13);
-    vec3 shimmerDark = vec3(0.92, 0.96, 1.0) * rippleShimmer * 0.18;
+    float clampedShimmer = clamp(rippleShimmer, -0.5, 1.8);
+    vec3 shimmerLight = vec3(clampedShimmer * 0.13);
+    vec3 shimmerDark = vec3(0.92, 0.96, 1.0) * clampedShimmer * 0.18;
     vec3 rippleShimmerCol = mix(shimmerDark, shimmerLight, u_bg_weights[2]);
     compositeColor += rippleShimmerCol;
 
@@ -654,8 +720,8 @@ class IridescentApp {
     const defaults = this.getDefaultSettings();
     const s = Object.assign({}, defaults, loaded);
 
-    if (typeof s.preset !== 'number' || s.preset < 0 || s.preset > 4) s.preset = defaults.preset;
-    if (typeof s.lightMode !== 'number' || s.lightMode < 0 || s.lightMode > 4) s.lightMode = defaults.lightMode;
+    if (!Number.isInteger(s.preset) || s.preset < 0 || s.preset > 4) s.preset = defaults.preset;
+    if (!Number.isInteger(s.lightMode) || s.lightMode < 0 || s.lightMode > 4) s.lightMode = defaults.lightMode;
     if (typeof s.flowSpeed !== 'number' || isNaN(s.flowSpeed) || s.flowSpeed < 0.1 || s.flowSpeed > 2.5) s.flowSpeed = defaults.flowSpeed;
     if (typeof s.dispersion !== 'number' || isNaN(s.dispersion) || s.dispersion < 0.0 || s.dispersion > 3.0) s.dispersion = defaults.dispersion;
     if (typeof s.grain !== 'number' || isNaN(s.grain) || s.grain < 0.1 || s.grain > 2.5) s.grain = defaults.grain;
@@ -675,10 +741,6 @@ class IridescentApp {
   }
 
   saveSettings() {
-    if (this._saveSettingsTimer) {
-      clearTimeout(this._saveSettingsTimer);
-      this._saveSettingsTimer = null;
-    }
     const committedPalette = this.paletteEditSnapshot || {
       colors: this.state.customPalette,
       enabled: this.state.customPaletteEnabled
@@ -694,6 +756,7 @@ class IridescentApp {
       customPaletteEnabled: committedPalette.enabled,
       customPaletteSlots: this.state.customPaletteSlots.map((slot) => slot.slice())
     };
+    this.lastSettingsSave = { settings: current, savedAt: Date.now() };
 
     // 1. 瀏覽器端 LocalStorage 保存
     try {
@@ -704,16 +767,14 @@ class IridescentApp {
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.macApp) {
       window.webkit.messageHandlers.macApp.postMessage({
         action: 'saveSettings',
-        settings: current
+        settings: current,
+        savedAt: this.lastSettingsSave.savedAt
       });
     }
   }
 
   queueSaveSettings() {
-    if (this._saveSettingsTimer) clearTimeout(this._saveSettingsTimer);
-    this._saveSettingsTimer = setTimeout(() => {
-      this.saveSettings();
-    }, 150);
+    this.saveSettings();
   }
 
   constructor() {
@@ -783,10 +844,20 @@ class IridescentApp {
     this.paletteSaveFeedbackTimer = null;
     this.openPaletteInput = null;
 
-    // 物理擴散水波漣漪隊列 (最多支援 10 組重疊干涉漣漪)
-    this.ripples = Array.from({ length: 10 }, () => ({ x: 0.5, y: 0.5, time: -100.0, strength: 0.0 }));
+    // 物理擴散水波與連續拖曳航跡隊列 (20 組，支援單點漣漪與完全連續的流體航跡)
+    this.maxRipples = 20;
+    this.ripplesA = Array.from({ length: this.maxRipples }, () => ({ x: 0.5, y: 0.5, time: -100.0, strength: 0.0 }));
+    this.ripplesB = Array.from({ length: this.maxRipples }, () => ({ x: 0.5, y: 0.5, time: -100.0, isSegment: 0.0 }));
     this.rippleIndex = 0;
-    this.rippleData = new Float32Array(40);
+    this.rippleDataA = new Float32Array(this.maxRipples * 4);
+    this.rippleDataB = new Float32Array(this.maxRipples * 4);
+
+    // 拖曳航跡水波狀態 (動態追蹤筆觸與航跡線段，創造完全自然連續的側向推水波)
+    this.isDragging = false;
+    this.isDraggingTouch = false;
+    this.currentDragSlot = -1;
+    this.lastDragAnchor = null;
+    this.dragSmoothed = null;
 
     // 純黑白動態反白文字紋理系統
     this.textCanvas = null;
@@ -824,6 +895,7 @@ class IridescentApp {
   updateScreenRole(isMain, mode) {
     this.screenRole = { isMain, mode };
     const hasText = this.shouldDisplayText(isMain, mode);
+    document.body.classList.remove('satellite-controls-visible');
     if (!hasText) {
       document.body.classList.add('satellite-screen');
     } else {
@@ -832,18 +904,120 @@ class IridescentApp {
     this.renderTextTexture();
   }
 
-  addRipple(clientX, clientY) {
+  addRipple(clientX, clientY, strength = 1.0) {
     if (this.state.isPaused) return;
     const rect = this.canvas.getBoundingClientRect();
-    const x = (clientX - rect.left) / rect.width;
-    const y = 1.0 - (clientY - rect.top) / rect.height;
-    this.ripples[this.rippleIndex] = {
-      x: Math.max(0.0, Math.min(1.0, x)),
-      y: Math.max(0.0, Math.min(1.0, y)),
+    const x = Math.max(0.0, Math.min(1.0, (clientX - rect.left) / rect.width));
+    const y = Math.max(0.0, Math.min(1.0, 1.0 - (clientY - rect.top) / rect.height));
+
+    const slot = this.rippleIndex;
+    this.rippleIndex = (this.rippleIndex + 1) % this.maxRipples;
+
+    this.ripplesA[slot] = {
+      x,
+      y,
       time: this.time,
-      strength: 1.0
+      strength: Math.max(0.0, Math.min(2.0, strength))
     };
-    this.rippleIndex = (this.rippleIndex + 1) % this.ripples.length;
+    this.ripplesB[slot] = {
+      x,
+      y,
+      time: this.time,
+      isSegment: 0.0 // 單點同心圓擴散
+    };
+  }
+
+  startDrag(clientX, clientY) {
+    if (this.state.isPaused) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const x = Math.max(0.0, Math.min(1.0, (clientX - rect.left) / rect.width));
+    const y = Math.max(0.0, Math.min(1.0, 1.0 - (clientY - rect.top) / rect.height));
+
+    const slot = this.rippleIndex;
+    this.rippleIndex = (this.rippleIndex + 1) % this.maxRipples;
+    this.currentDragSlot = slot;
+
+    // 起始為單點觸發水花
+    this.ripplesA[slot] = { x, y, time: this.time, strength: 0.9 };
+    this.ripplesB[slot] = { x, y, time: this.time, isSegment: 0.0 };
+
+    this.dragSmoothed = { clientX, clientY, x, y };
+    this.lastDragAnchor = {
+      clientX,
+      clientY,
+      x,
+      y,
+      time: this.time
+    };
+  }
+
+  updateDrag(clientX, clientY) {
+    if (this.state.isPaused || !this.lastDragAnchor) return;
+    const rect = this.canvas.getBoundingClientRect();
+
+    // 平滑濾波：消除滑鼠/觸控微小抖動，讓弧線更為圓融連續
+    if (!this.dragSmoothed) {
+      this.dragSmoothed = { clientX, clientY, x: 0.5, y: 0.5 };
+    }
+    const smoothFactor = 0.55;
+    this.dragSmoothed.clientX += (clientX - this.dragSmoothed.clientX) * smoothFactor;
+    this.dragSmoothed.clientY += (clientY - this.dragSmoothed.clientY) * smoothFactor;
+
+    const curX = Math.max(0.0, Math.min(1.0, (this.dragSmoothed.clientX - rect.left) / rect.width));
+    const curY = Math.max(0.0, Math.min(1.0, 1.0 - (this.dragSmoothed.clientY - rect.top) / rect.height));
+    this.dragSmoothed.x = curX;
+    this.dragSmoothed.y = curY;
+
+    const dx = this.dragSmoothed.clientX - this.lastDragAnchor.clientX;
+    const dy = this.dragSmoothed.clientY - this.lastDragAnchor.clientY;
+    const dist = Math.hypot(dx, dy);
+
+    // 微幅移動即可轉化為連續線段航跡（完全消除離散連點感）
+    if (dist >= 3.0 && this.currentDragSlot >= 0) {
+      const slot = this.currentDragSlot;
+      this.ripplesB[slot].x = curX;
+      this.ripplesB[slot].y = curY;
+      this.ripplesB[slot].time = this.time;
+      this.ripplesB[slot].isSegment = 1.0;
+      this.ripplesA[slot].strength = 0.72; // 連續拖曳的柔和水光強度
+    }
+
+    // 縮短步長門檻 (約 20px)，讓弧線轉折極其細膩圓融，徹底消除「一段一段」的生硬折角感
+    const segmentLengthThreshold = 20.0;
+    if (dist >= segmentLengthThreshold) {
+      const nextSlot = this.rippleIndex;
+      this.rippleIndex = (this.rippleIndex + 1) % this.maxRipples;
+
+      this.ripplesA[nextSlot] = {
+        x: curX,
+        y: curY,
+        time: this.time,
+        strength: 0.72
+      };
+      this.ripplesB[nextSlot] = {
+        x: curX,
+        y: curY,
+        time: this.time,
+        isSegment: 1.0
+      };
+
+      this.currentDragSlot = nextSlot;
+      this.lastDragAnchor = {
+        clientX: this.dragSmoothed.clientX,
+        clientY: this.dragSmoothed.clientY,
+        x: curX,
+        y: curY,
+        time: this.time
+      };
+    }
+  }
+
+  endDrag() {
+    this.isDragging = false;
+    this.isDraggingTouch = false;
+    this.currentDragSlot = -1;
+    this.lastDragAnchor = null;
+    this.dragSmoothed = null;
   }
 
   drawSpacedText(ctx, text, x, y, letterSpacing) {
@@ -1068,7 +1242,8 @@ class IridescentApp {
       this.uniforms[name] = gl.getUniformLocation(program, name);
     });
     this.uniforms.u_bg_weights = gl.getUniformLocation(program, 'u_bg_weights[0]') || gl.getUniformLocation(program, 'u_bg_weights');
-    this.uniforms.u_ripples = gl.getUniformLocation(program, 'u_ripples[0]') || gl.getUniformLocation(program, 'u_ripples');
+    this.uniforms.u_ripples_a = gl.getUniformLocation(program, 'u_ripples_a[0]') || gl.getUniformLocation(program, 'u_ripples_a');
+    this.uniforms.u_ripples_b = gl.getUniformLocation(program, 'u_ripples_b[0]') || gl.getUniformLocation(program, 'u_ripples_b');
     this.uniforms.u_text_texture = gl.getUniformLocation(program, 'u_text_texture');
     return true;
   }
@@ -1127,17 +1302,46 @@ class IridescentApp {
       updateMousePos(e.clientX, e.clientY);
       const overUI = !!isUIEventTarget(e.target);
       document.body.classList.toggle('cursor-over-ui', overUI);
+
+      // 當按住左鍵在畫布上拖曳時，實時動態延展航跡水波
+      if ((e.buttons & 1) === 1 && !overUI && !this.state.isPaused) {
+        if (!this.isDragging) {
+          this.isDragging = true;
+          this.startDrag(e.clientX, e.clientY);
+        } else {
+          this.updateDrag(e.clientX, e.clientY);
+        }
+      } else if (this.isDragging) {
+        this.endDrag();
+      }
     });
 
     window.addEventListener('mousedown', (e) => {
       if (this.state.isPaused) return;
       if (isUIEventTarget(e.target)) return;
-      this.addRipple(e.clientX, e.clientY);
+      this.isDragging = true;
+      this.startDrag(e.clientX, e.clientY);
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (this.isDragging) this.endDrag();
+    });
+
+    window.addEventListener('mouseleave', () => {
+      if (this.isDragging) this.endDrag();
+    });
+
+    window.addEventListener('blur', () => {
+      if (this.isDragging) this.endDrag();
     });
 
     window.addEventListener('touchmove', (e) => {
       if (e.touches.length > 0) {
-        updateMousePos(e.touches[0].clientX, e.touches[0].clientY);
+        const t = e.touches[0];
+        updateMousePos(t.clientX, t.clientY);
+        if (this.isDraggingTouch && !this.state.isPaused && !isUIEventTarget(e.target)) {
+          this.updateDrag(t.clientX, t.clientY);
+        }
       }
     }, { passive: true });
 
@@ -1145,10 +1349,22 @@ class IridescentApp {
       if (this.state.isPaused) return;
       if (e.touches.length > 0) {
         const t = e.touches[0];
-        if (isUIEventTarget(e.target)) return;
-        this.addRipple(t.clientX, t.clientY);
+        if (isUIEventTarget(e.target)) {
+          this.isDraggingTouch = false;
+          return;
+        }
+        this.isDraggingTouch = true;
+        this.startDrag(t.clientX, t.clientY);
         updateMousePos(t.clientX, t.clientY);
       }
+    }, { passive: true });
+
+    window.addEventListener('touchend', () => {
+      if (this.isDraggingTouch) this.endDrag();
+    }, { passive: true });
+
+    window.addEventListener('touchcancel', () => {
+      if (this.isDraggingTouch) this.endDrag();
     }, { passive: true });
 
     window.addEventListener('keydown', (e) => {
@@ -1179,20 +1395,34 @@ class IridescentApp {
     // 1. 若控制抽屜開啟，先關閉抽屜
     if (this.controlsPanel && this.controlsPanel.classList.contains('open')) {
       this.setControlsPanelOpen(false, { focusTrigger: true });
-      return;
+      return 'closed-panel';
     }
 
     // 2. 若處於專注模式或全螢幕模式，按第一次 Esc 回到調整介面
     if (this.state.viewMode !== 'normal') {
       document.body.classList.remove('satellite-screen');
       this.setViewMode('normal');
-      return;
+      return 'revealed';
     }
 
     // 3. 若已在調整介面，再次按 Esc 則是退出螢幕保護程式
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.macApp) {
       window.webkit.messageHandlers.macApp.postMessage({ action: 'exitScreensaver' });
     }
+    return 'exit-requested';
+  }
+
+  revealSatelliteCapture() {
+    const isPureExtendedScreen = this.screenRole
+      && ['secondary_extend', 'primary_extend'].includes(this.screenRole.mode)
+      && !this.shouldDisplayText(this.screenRole.isMain, this.screenRole.mode);
+    if (!isPureExtendedScreen) return;
+    this.setViewMode('normal');
+    document.body.classList.add('satellite-screen', 'satellite-controls-visible');
+  }
+
+  hideSatelliteCapture() {
+    document.body.classList.remove('satellite-controls-visible');
   }
 
   setControlsPanelOpen(open, { focusTrigger = false } = {}) {
@@ -1470,15 +1700,18 @@ class IridescentApp {
 
   applySettings(settings) {
     if (!settings || typeof settings !== 'object') return;
+    // Keep the cancellation/commit baseline current when another screen saves.
+    const draft = this.paletteEditSnapshot && this.paletteEditDirty
+      ? { colors: this.state.customPalette.slice(), enabled: this.state.customPaletteEnabled } : null;
 
-    if (typeof settings.preset === 'number' && settings.preset >= 0 && settings.preset <= 4) {
+    if (Number.isInteger(settings.preset) && settings.preset >= 0 && settings.preset <= 4) {
       this.state.presetFrom = this.state.preset;
       this.state.presetTo = settings.preset;
       this.state.preset = settings.preset;
       this.state.presetTransition = 0.0;
     }
 
-    if (typeof settings.lightMode === 'number' && settings.lightMode >= 0 && settings.lightMode <= 4) {
+    if (Number.isInteger(settings.lightMode) && settings.lightMode >= 0 && settings.lightMode <= 4) {
       this.state.lightMode = settings.lightMode;
       this.state.targetBgWeights = [0.0, 0.0, 0.0, 0.0, 0.0];
       this.state.targetBgWeights[settings.lightMode] = 1.0;
@@ -1506,6 +1739,10 @@ class IridescentApp {
       this.state.customPaletteSlots = this.normalizePaletteSlots(settings.customPaletteSlots);
     }
 
+    if (this.paletteEditSnapshot) {
+      this.paletteEditSnapshot = { colors: this.state.customPalette.slice(), enabled: this.state.customPaletteEnabled };
+    }
+    if (draft) this.updateCustomPalette(draft.colors, draft.enabled);
     this.syncUIFromState();
   }
 
@@ -1715,6 +1952,15 @@ class IridescentApp {
       this.setControlsPanelOpen(false);
       this.renderTextTexture();
     }
+
+    if (this.screenRole?.isMain
+      && ['secondary_extend', 'primary_extend'].includes(this.screenRole.mode)
+      && window.webkit?.messageHandlers?.macApp) {
+      window.webkit.messageHandlers.macApp.postMessage({
+        action: 'syncSatelliteControls',
+        visible: mode === 'normal'
+      });
+    }
   }
 
   setupDockHover() {
@@ -1896,16 +2142,25 @@ class IridescentApp {
     gl.uniform2f(this.uniforms.u_resolution, this.canvas.width, this.canvas.height);
     gl.uniform1f(this.uniforms.u_time, this.time);
     gl.uniform2f(this.uniforms.u_mouse, this.mouse.x, this.mouse.y);
-    // 物理擴散水波漣漪數據上載
-    for (let i = 0; i < 10; i++) {
-      const r = this.ripples[i];
-      this.rippleData[i * 4 + 0] = r.x;
-      this.rippleData[i * 4 + 1] = r.y;
-      this.rippleData[i * 4 + 2] = r.time;
-      this.rippleData[i * 4 + 3] = r.strength;
+    // 物理擴散水波與連續拖曳航跡數據上載
+    for (let i = 0; i < this.maxRipples; i++) {
+      const a = this.ripplesA[i];
+      const b = this.ripplesB[i];
+      this.rippleDataA[i * 4 + 0] = a.x;
+      this.rippleDataA[i * 4 + 1] = a.y;
+      this.rippleDataA[i * 4 + 2] = a.time;
+      this.rippleDataA[i * 4 + 3] = a.strength;
+
+      this.rippleDataB[i * 4 + 0] = b.x;
+      this.rippleDataB[i * 4 + 1] = b.y;
+      this.rippleDataB[i * 4 + 2] = b.time;
+      this.rippleDataB[i * 4 + 3] = b.isSegment;
     }
-    if (this.uniforms.u_ripples) {
-      gl.uniform4fv(this.uniforms.u_ripples, this.rippleData);
+    if (this.uniforms.u_ripples_a) {
+      gl.uniform4fv(this.uniforms.u_ripples_a, this.rippleDataA);
+    }
+    if (this.uniforms.u_ripples_b) {
+      gl.uniform4fv(this.uniforms.u_ripples_b, this.rippleDataB);
     }
 
     // 綁定動態反白文字紋理
@@ -1973,6 +2228,16 @@ window.addEventListener('DOMContentLoaded', () => {
         window.appInstance.updateScreenRole(isMain, mode);
         const hasText = window.appInstance.shouldDisplayText(isMain, mode);
         window.appInstance.setViewMode(hasText ? 'hide_buttons' : 'hide_all');
+      }
+    },
+    revealSatelliteCapture: () => {
+      if (window.appInstance) {
+        window.appInstance.revealSatelliteCapture();
+      }
+    },
+    hideSatelliteCapture: () => {
+      if (window.appInstance) {
+        window.appInstance.hideSatelliteCapture();
       }
     },
     setNormalMode: () => {

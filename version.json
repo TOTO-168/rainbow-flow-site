@@ -1,5 +1,5 @@
 {
-  "version": "1.2.16",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.16/RainbowFlow.zip",
-  "notes": "修正設定保存時序、多螢幕設定同步、畫面程序恢復，以及更新結果通知未完成時的處理。"
+  "version": "1.2.17",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.17/RainbowFlow.zip",
+  "notes": "新增流體拖曳水波與連續航跡系統，具備自然扇形尾波擴散與柔和水脊光影。"
 }
