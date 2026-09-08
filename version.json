@@ -1,5 +1,5 @@
 {
-  "version": "1.2.12",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.12/RainbowFlow.zip",
-  "notes": "Aura 正式改名與 Logo 整合；保留既有 Bundle ID、登入項目與使用者設定，並支援舊版自動遷移。"
+  "version": "1.2.13",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.13/RainbowFlow.zip",
+  "notes": "保留 Aura App Logo；恢復原本的選單列 sparkles 圖示，並延續舊版路徑與 Bundle ID 遷移相容性。"
 }
