@@ -1,5 +1,5 @@
 {
-  "version": "1.2.22",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.22/Aura.zip",
-  "notes": "修正主螢幕延伸模式下，進入專注或全螢幕模式後延伸螢幕仍顯示相機按鈕的問題。"
+  "version": "1.2.23",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.23/Aura.zip",
+  "notes": "修正更新完成驗證後無法關閉舊版、導致安裝卡住的問題；更新準備流程現在會顯示明確階段並在逾時時回報錯誤。"
 }
