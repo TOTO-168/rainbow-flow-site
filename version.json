@@ -1,5 +1,5 @@
 {
-  "version": "1.2.23",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.23/Aura.zip",
-  "notes": "修正更新完成驗證後無法關閉舊版、導致安裝卡住的問題；更新準備流程現在會顯示明確階段並在逾時時回報錯誤。"
+  "version": "1.2.24",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.24/Aura.zip",
+  "notes": "改善拖曳手勢判定：按下時不再先出現點擊漣漪，跨過移動門檻後會直接進入拖曳；單純點擊仍保留原本的漣漪效果。"
 }
