@@ -1,5 +1,5 @@
 {
-  "version": "1.2.25",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.25/Aura.zip",
-  "notes": "改善螢幕保護穩定性：避免無實際變更的螢幕通知造成畫面短暫重啟，並修正暫停重畫、風格過渡、隱藏控制列與更新視窗顯示問題。"
+  "version": "1.2.26",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.26/Aura.zip",
+  "notes": "新增 45 分鐘與 1 小時閒置啟動選項，並整理閒置時間選單。"
 }
