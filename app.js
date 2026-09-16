@@ -23,6 +23,7 @@ const fragmentShaderSource = `
   uniform vec2 u_resolution;
   uniform float u_time;
   uniform vec2 u_mouse;
+  uniform bool u_ripples_enabled;
   uniform vec4 u_ripples_a[20];
   uniform vec4 u_ripples_b[20];
   uniform sampler2D u_text_texture;
@@ -428,12 +429,16 @@ const fragmentShaderSource = `
     // 柔和水槽寬度 (溫潤自然的航跡核心寬度，消除生硬細線)
     const float coreWidth = 0.034;
 
+    const float rippleLifetime = 4.8 * 1.2 * 1.2 * 1.3;
+
+    if (u_ripples_enabled) {
     for (int i = 0; i < 20; i++) {
       float strength = u_ripples_a[i].w;
       if (strength <= 0.001) continue;
 
       float tA = u_ripples_a[i].z;
       float tB = u_ripples_b[i].z;
+      if (u_time - max(tA, tB) >= rippleLifetime) continue;
       float isSeg = u_ripples_b[i].w;
 
       vec2 posA = (u_ripples_a[i].xy - 0.5) * aspect;
@@ -444,6 +449,17 @@ const fragmentShaderSource = `
       vec2 ab = posB - posA;
       float lenAB = length(ab);
       float tailFade = 1.0;
+      float wakeWidthScale = 1.0;
+      float wakeFrequency = 22.0;
+      float speedResponse = 1.0;
+
+      if (isSeg > 0.5) {
+        float segmentSpeed = lenAB / max(tB - tA, 0.06);
+        speedResponse = smoothstep(0.025, 0.16, segmentSpeed);
+        wakeWidthScale = mix(0.34, 1.0, speedResponse);
+        wakeFrequency = mix(38.0, 22.0, speedResponse);
+      }
+      float shapedCoreWidth = coreWidth * wakeWidthScale;
 
       // 若為連續拖曳段，精確計算主體航跡與尾端真實擴散扇區 (V-Wake Flaring Dispersion)
       if (isSeg > 0.5 && lenAB > 0.0005) {
@@ -464,14 +480,15 @@ const fragmentShaderSource = `
           float latSign = (dot(pRel, vDir) >= 0.0) ? 1.0 : -1.0;
 
           // 尾波向兩側展開的擴散率 (~27 度扇形開口)
-          float flareRate = 0.52;
+          float flareRate = mix(0.42, 0.52, speedResponse);
           float flareOffset = backDist * flareRate;
           closestP = posA + (vDir * latSign) * flareOffset;
 
           // 尾部中央破除閉合圓弧（中軸不閉合，向外散開）
-          float tailCenterOpen = smoothstep(0.002, coreWidth * 1.6, latDist + flareOffset * 0.8);
+          float tailCenterOpen = smoothstep(0.002, shapedCoreWidth * 1.6, latDist + flareOffset * 0.8);
           // 沿擴散方向溫潤消散融於水面 (延展 20% 散逸長度)
-          tailFade = exp(-pow(backDist / 0.192, 1.7)) * tailCenterOpen;
+          float tailLength = mix(0.11, 0.192, speedResponse);
+          tailFade = exp(-pow(backDist / tailLength, 1.7)) * tailCenterOpen;
           h = 0.0;
         }
       }
@@ -479,42 +496,49 @@ const fragmentShaderSource = `
       float birthTime = mix(tA, tB, h);
       float age = u_time - birthTime;
 
-      if (age >= 0.0 && age < 4.8) {
+      if (age >= 0.0 && age < rippleLifetime) {
         vec2 deltaP = p - closestP;
         float rawDist = length(deltaP);
 
         // 柔化中心線：利用雙曲平滑半徑，將中心尖銳折痕轉化為柔和寬潤的自然水槽 (U-shaped furrow)
         float dist = (isSeg > 0.5)
-          ? sqrt(rawDist * rawDist + coreWidth * coreWidth) - coreWidth * 0.35
+          ? sqrt(rawDist * rawDist + shapedCoreWidth * shapedCoreWidth) - shapedCoreWidth * 0.35
           : rawDist;
+
+        // 傳播速度與波前半徑 (拖曳時起始帶有寬潤基礎波寬)
+        float waveSpeed = 0.28 * mix(0.28, 1.0, speedResponse);
+        float baseRadius = (isSeg > 0.5) ? (shapedCoreWidth * 0.65) : 0.0;
+        float waveRadius = baseRadius + age * waveSpeed;
+        float packetWidth1 = (0.088 + age * 0.048) * wakeWidthScale;
+        float packetWidth2 = (0.092 + age * 0.050) * wakeWidthScale;
+
+        // 高斯波包在此範圍外已低於可見精度，先跳過昂貴的 noise 與三角函數。
+        float visibleRadius = waveRadius + max(packetWidth1, packetWidth2) * 3.5 + 0.02;
+        float waveSpacing = (0.105 + age * 0.024) * mix(0.55, 1.0, speedResponse);
+        // Both Gaussian packets are negligible inside the inner wavefront too.
+        // Include the maximum noise displacement so the visible crests are retained.
+        float innerRadius = waveRadius - waveSpacing - packetWidth2 * 3.5 - 0.02;
+        if (dist > visibleRadius || dist < innerRadius || tailFade < 0.0001) continue;
 
         // 空間流場微擾 (純空間微擾破除幾何死板感，不引入角度諧波，無旋轉與葉瓣感)
         float fluidPerturb = snoise(deltaP * 2.2 + birthTime * 0.15) * 0.016;
         float organicDist = dist + fluidPerturb * smoothstep(0.03, 0.40, dist);
-
-        // 傳播速度與波前半徑 (拖曳時起始帶有寬潤基礎波寬)
-        float waveSpeed = 0.28;
-        float baseRadius = (isSeg > 0.5) ? (coreWidth * 0.65) : 0.0;
-        float waveRadius = baseRadius + age * waveSpeed;
         float deltaDist1 = organicDist - waveRadius;
 
         // 因果性平滑過渡：波前未受擾動水面維持靜謐
         float causality = 1.0 - smoothstep(-0.045, 0.045, deltaDist1);
 
         // 1. 第一道主波 (Outer Primary Crest) - 寬波形、柔舒展開
-        float packetWidth1 = 0.088 + age * 0.048;
         float env1 = exp(-pow(deltaDist1 / packetWidth1, 2.0) * 3.0) * causality;
-        float phase1 = deltaDist1 * 22.0; // 略微放緩頻率，讓水波更舒展寬厚大氣
+        float phase1 = deltaDist1 * wakeFrequency;
         float wave1 = (cos(phase1) + 0.20 * cos(phase1 * 2.0)) * env1;
         float slope1 = -sin(phase1) * env1;
 
         // 2. 第二道次波 (Inner Secondary Rebound Crest - 隨中心反彈水柱自然激發)
-        float waveSpacing = 0.105 + age * 0.024;
         float deltaDist2 = deltaDist1 + waveSpacing;
         float wave2Birth = smoothstep(0.10, 0.38, age);
-        float packetWidth2 = 0.092 + age * 0.050;
         float env2 = exp(-pow(deltaDist2 / packetWidth2, 2.0) * 3.0) * wave2Birth;
-        float phase2 = deltaDist2 * 22.0;
+        float phase2 = deltaDist2 * wakeFrequency;
         float wave2 = (cos(phase2) + 0.20 * cos(phase2 * 2.0)) * env2 * 0.60;
         float slope2 = -sin(phase2) * env2 * 0.60;
 
@@ -524,21 +548,24 @@ const fragmentShaderSource = `
 
         // 雙重物理黏滯消散：
         // 1. 雙曲阻尼與長效平滑衰減 (延展 20% 存續時間與傳播距離)
-        float timeFade = (1.0 - smoothstep(0.0, 4.8, age)) * (1.0 / (1.0 + age * 0.54));
+        // Fade in drag segments only; clicks retain their original immediate circular ripple.
+        float birthFade = isSeg > 0.5 ? smoothstep(0.0, 0.30, age) : 1.0;
+        float wakeLifetime = rippleLifetime * mix(0.45, 1.0, speedResponse);
+        float timeFade = birthFade * (1.0 - smoothstep(0.0, wakeLifetime, age)) * (1.0 / (1.0 + age * 0.54));
         // 2. 能量自然擴散衰減 (1/sqrt(r))
         float geoFade = 1.0 / sqrt(max(dist, 0.04) * 2.8 + 0.7);
 
         // 兩端過渡羽化 (消除線段接縫硬感)
         float segmentFeather = 1.0;
         if (isSeg > 0.5) {
-          segmentFeather = smoothstep(0.0, 0.18, h) * smoothstep(1.0, 0.82, h);
+          segmentFeather = smoothstep(0.0, 0.18, h) * (1.0 - smoothstep(0.82, 1.0, h));
           segmentFeather = mix(0.75, 1.0, segmentFeather);
         }
 
         float amp = wave * timeFade * geoFade * strength * segmentFeather * tailFade;
 
         // 中心平滑衰退：在中心線 rawDist -> 0 處平滑過渡至 0，徹底消滅中心刺眼細線
-        float centerFade = (isSeg > 0.5) ? smoothstep(0.002, coreWidth * 1.4, rawDist) : 1.0;
+        float centerFade = (isSeg > 0.5) ? smoothstep(0.002, shapedCoreWidth * 1.4, rawDist) : 1.0;
         vec2 dir = (rawDist > 0.0005) ? (deltaP / rawDist) * centerFade : vec2(0.0);
         rippleDisplace -= dir * (amp * 0.034);
 
@@ -551,6 +578,7 @@ const fragmentShaderSource = `
       }
     }
 
+    }
     twistedP += clamp(rippleDisplace, vec2(-0.06), vec2(0.06));
 
     float t = u_time * u_flow_speed * 0.28;
@@ -682,6 +710,7 @@ class IridescentApp {
       dispersion: 1.20,
       grain: 0.60,
       cursorInfluence: 0.20,
+      dragInteraction: false,
       customPalette: ['#ff5a82', '#28c3ff', '#a04bff'],
       customPaletteEnabled: false,
       customPaletteSlots: [[], [], []]
@@ -731,6 +760,7 @@ class IridescentApp {
     } else {
       s.customPalette = s.customPalette.map((color, index) => this.normalizeHexColor(color, defaults.customPalette[index]));
     }
+    if (typeof s.dragInteraction !== 'boolean') s.dragInteraction = defaults.dragInteraction;
     s.customPaletteEnabled = s.customPaletteEnabled === true;
     const savedSlots = loaded && Array.isArray(loaded.customPaletteSlots) && loaded.customPaletteSlots.length === 3
       ? loaded.customPaletteSlots
@@ -752,23 +782,45 @@ class IridescentApp {
       dispersion: this.state.dispersion,
       grain: this.state.grain,
       cursorInfluence: this.state.cursorInfluence,
+      dragInteraction: this.state.dragInteraction,
       customPalette: committedPalette.colors.slice(),
       customPaletteEnabled: committedPalette.enabled,
       customPaletteSlots: this.state.customPaletteSlots.map((slot) => slot.slice())
     };
     this.lastSettingsSave = { settings: current, savedAt: Date.now() };
 
+    // 快照一律同步更新（退出或更新前，原生端一定讀得到最新數值），但實際寫入
+    // 與跨螢幕廣播採「首發立即 + 尾端補寫」節流：拖曳滑桿時每毫秒都可能觸發
+    // input 事件，未節流會讓對端螢幕被反覆重繪，也會不斷寫入 UserDefaults。
+    this.pendingSettingsSave = current;
+    if (this.settingsPersistTimer) return;
+    this.flushSettingsPersistence();
+    this.settingsPersistTimer = setTimeout(() => {
+      this.settingsPersistTimer = null;
+      this.flushSettingsPersistence();
+    }, 200);
+  }
+
+  flushSettingsPersistence() {
+    const settings = this.pendingSettingsSave;
+    this.pendingSettingsSave = null;
+    if (this.settingsPersistTimer) {
+      clearTimeout(this.settingsPersistTimer);
+      this.settingsPersistTimer = null;
+    }
+    if (!settings) return;
+
     // 1. 瀏覽器端 LocalStorage 保存
     try {
-      localStorage.setItem('rainbowflow_user_settings', JSON.stringify(current));
+      localStorage.setItem('rainbowflow_user_settings', JSON.stringify(settings));
     } catch (e) {}
 
     // 2. 原生 macOS 端 UserDefaults 保存
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.macApp) {
       window.webkit.messageHandlers.macApp.postMessage({
         action: 'saveSettings',
-        settings: current,
-        savedAt: this.lastSettingsSave.savedAt
+        settings,
+        savedAt: this.lastSettingsSave ? this.lastSettingsSave.savedAt : Date.now()
       });
     }
   }
@@ -796,6 +848,7 @@ class IridescentApp {
       halftoneScale: 0.50,
       vortexPower: 0.0,
       cursorInfluence: initialSettings.cursorInfluence,
+      dragInteraction: initialSettings.dragInteraction,
       defocus: 0.30,
       contrast: 1.15,
       lightMode: initialSettings.lightMode,
@@ -843,9 +896,13 @@ class IridescentApp {
     this.paletteSlotSelection = 0;
     this.paletteSaveFeedbackTimer = null;
     this.openPaletteInput = null;
+    this.pendingSettingsSave = null;
+    this.settingsPersistTimer = null;
+    this.textTextureRafId = null;
 
     // 物理擴散水波與連續拖曳航跡隊列 (20 組，支援單點漣漪與完全連續的流體航跡)
     this.maxRipples = 20;
+    this.rippleLifetime = 4.8 * 1.2 * 1.2 * 1.3;
     this.ripplesA = Array.from({ length: this.maxRipples }, () => ({ x: 0.5, y: 0.5, time: -100.0, strength: 0.0 }));
     this.ripplesB = Array.from({ length: this.maxRipples }, () => ({ x: 0.5, y: 0.5, time: -100.0, isSegment: 0.0 }));
     this.rippleIndex = 0;
@@ -856,8 +913,11 @@ class IridescentApp {
     this.isDragging = false;
     this.isDraggingTouch = false;
     this.currentDragSlot = -1;
+    this.dragProducedSegment = false;
     this.lastDragAnchor = null;
     this.dragSmoothed = null;
+    this.pendingDragPoint = null;
+    this.dragRafId = null;
 
     // 純黑白動態反白文字紋理系統
     this.textCanvas = null;
@@ -906,9 +966,7 @@ class IridescentApp {
 
   addRipple(clientX, clientY, strength = 1.0) {
     if (this.state.isPaused) return;
-    const rect = this.canvas.getBoundingClientRect();
-    const x = Math.max(0.0, Math.min(1.0, (clientX - rect.left) / rect.width));
-    const y = Math.max(0.0, Math.min(1.0, 1.0 - (clientY - rect.top) / rect.height));
+    const { x, y } = this.normalizePointer(clientX, clientY);
 
     const slot = this.rippleIndex;
     this.rippleIndex = (this.rippleIndex + 1) % this.maxRipples;
@@ -928,19 +986,11 @@ class IridescentApp {
   }
 
   startDrag(clientX, clientY) {
-    if (this.state.isPaused) return;
-    const rect = this.canvas.getBoundingClientRect();
-    const x = Math.max(0.0, Math.min(1.0, (clientX - rect.left) / rect.width));
-    const y = Math.max(0.0, Math.min(1.0, 1.0 - (clientY - rect.top) / rect.height));
-
-    const slot = this.rippleIndex;
-    this.rippleIndex = (this.rippleIndex + 1) % this.maxRipples;
-    this.currentDragSlot = slot;
-
-    // 起始為單點觸發水花
-    this.ripplesA[slot] = { x, y, time: this.time, strength: 0.9 };
-    this.ripplesB[slot] = { x, y, time: this.time, isSegment: 0.0 };
-
+    if (!this.state.dragInteraction || this.state.isPaused) return;
+    const { x, y } = this.normalizePointer(clientX, clientY);
+    // Keep the press pending. Movement creates a segment; release creates a click ripple.
+    this.currentDragSlot = -1;
+    this.dragProducedSegment = false;
     this.dragSmoothed = { clientX, clientY, x, y };
     this.lastDragAnchor = {
       clientX,
@@ -952,8 +1002,7 @@ class IridescentApp {
   }
 
   updateDrag(clientX, clientY) {
-    if (this.state.isPaused || !this.lastDragAnchor) return;
-    const rect = this.canvas.getBoundingClientRect();
+    if (!this.state.dragInteraction || this.state.isPaused || !this.lastDragAnchor) return;
 
     // 平滑濾波：消除滑鼠/觸控微小抖動，讓弧線更為圓融連續
     if (!this.dragSmoothed) {
@@ -963,8 +1012,7 @@ class IridescentApp {
     this.dragSmoothed.clientX += (clientX - this.dragSmoothed.clientX) * smoothFactor;
     this.dragSmoothed.clientY += (clientY - this.dragSmoothed.clientY) * smoothFactor;
 
-    const curX = Math.max(0.0, Math.min(1.0, (this.dragSmoothed.clientX - rect.left) / rect.width));
-    const curY = Math.max(0.0, Math.min(1.0, 1.0 - (this.dragSmoothed.clientY - rect.top) / rect.height));
+    const { x: curX, y: curY } = this.normalizePointer(this.dragSmoothed.clientX, this.dragSmoothed.clientY);
     this.dragSmoothed.x = curX;
     this.dragSmoothed.y = curY;
 
@@ -973,35 +1021,29 @@ class IridescentApp {
     const dist = Math.hypot(dx, dy);
 
     // 微幅移動即可轉化為連續線段航跡（完全消除離散連點感）
-    if (dist >= 3.0 && this.currentDragSlot >= 0) {
+    const beginsSegment = dist >= 3.0 && this.currentDragSlot < 0;
+    if (dist >= 3.0) {
+      if (beginsSegment) {
+        this.dragProducedSegment = true;
+        this.currentDragSlot = this.rippleIndex;
+        this.rippleIndex = (this.rippleIndex + 1) % this.maxRipples;
+        this.ripplesA[this.currentDragSlot] = {
+          x: this.lastDragAnchor.x,
+          y: this.lastDragAnchor.y,
+          time: this.time,
+          strength: 0.72
+        };
+      }
       const slot = this.currentDragSlot;
-      this.ripplesB[slot].x = curX;
-      this.ripplesB[slot].y = curY;
-      this.ripplesB[slot].time = this.time;
-      this.ripplesB[slot].isSegment = 1.0;
-      this.ripplesA[slot].strength = 0.72; // 連續拖曳的柔和水光強度
+      this.ripplesB[slot] = { x: curX, y: curY, time: this.time, isSegment: 1.0 };
     }
 
-    // 縮短步長門檻 (約 20px)，讓弧線轉折極其細膩圓融，徹底消除「一段一段」的生硬折角感
-    const segmentLengthThreshold = 20.0;
-    if (dist >= segmentLengthThreshold) {
-      const nextSlot = this.rippleIndex;
-      this.rippleIndex = (this.rippleIndex + 1) % this.maxRipples;
-
-      this.ripplesA[nextSlot] = {
-        x: curX,
-        y: curY,
-        time: this.time,
-        strength: 0.72
-      };
-      this.ripplesB[nextSlot] = {
-        x: curX,
-        y: curY,
-        time: this.time,
-        isSegment: 1.0
-      };
-
-      this.currentDragSlot = nextSlot;
+    // 延長每個槽位覆蓋的軌跡，讓 20 組水波保留更長的完整拖曳路徑而不增加 GPU 負擔。
+    const segmentLengthThreshold = 20.0 * 1.2 * 1.2 * 1.3;
+    if (dist >= segmentLengthThreshold && !beginsSegment) {
+      // Finish the current segment here. The next pointer movement creates the
+      // following segment with real length, avoiding a zero-length circular flash.
+      this.currentDragSlot = -1;
       this.lastDragAnchor = {
         clientX: this.dragSmoothed.clientX,
         clientY: this.dragSmoothed.clientY,
@@ -1012,12 +1054,55 @@ class IridescentApp {
     }
   }
 
-  endDrag() {
+  endDrag(cancelled = false) {
+    const finalPoint = this.pendingDragPoint;
+    if (this.dragRafId !== null) cancelAnimationFrame(this.dragRafId);
+    if (finalPoint && this.lastDragAnchor) {
+      this.updateDrag(finalPoint.clientX, finalPoint.clientY);
+    }
+    const clickPoint = !this.dragProducedSegment ? this.lastDragAnchor : null;
     this.isDragging = false;
     this.isDraggingTouch = false;
     this.currentDragSlot = -1;
+    this.dragProducedSegment = false;
     this.lastDragAnchor = null;
     this.dragSmoothed = null;
+    this.pendingDragPoint = null;
+    this.dragRafId = null;
+    if (clickPoint && !cancelled) this.addRipple(clickPoint.clientX, clickPoint.clientY, 0.9);
+  }
+
+  normalizePointer(clientX, clientY) {
+    const width = this.viewportWidth || window.innerWidth || 1;
+    const height = this.viewportHeight || window.innerHeight || 1;
+    return {
+      x: Math.max(0.0, Math.min(1.0, clientX / width)),
+      y: Math.max(0.0, Math.min(1.0, 1.0 - clientY / height))
+    };
+  }
+
+  queueDragUpdate(clientX, clientY) {
+    if (!this.state.dragInteraction || this.state.isPaused) return;
+    this.pendingDragPoint = { clientX, clientY };
+    if (this.dragRafId !== null) return;
+    this.dragRafId = requestAnimationFrame(() => {
+      this.dragRafId = null;
+      const point = this.pendingDragPoint;
+      this.pendingDragPoint = null;
+      if (point && (this.isDragging || this.isDraggingTouch)) {
+        this.updateDrag(point.clientX, point.clientY);
+      }
+    });
+  }
+
+  retireExpiredRipples() {
+    for (let i = 0; i < this.maxRipples; i++) {
+      const a = this.ripplesA[i];
+      const b = this.ripplesB[i];
+      if (a.strength > 0 && this.time - Math.max(a.time, b.time) >= this.rippleLifetime) {
+        a.strength = 0;
+      }
+    }
   }
 
   drawSpacedText(ctx, text, x, y, letterSpacing) {
@@ -1072,17 +1157,18 @@ class IridescentApp {
     const width = window.innerWidth;
     const height = window.innerHeight;
 
-    this.textCanvas.width = width * dpr;
-    this.textCanvas.height = height * dpr;
+    const isMain = this.screenRole ? this.screenRole.isMain : true;
+    const mode = this.screenRole ? this.screenRole.mode : 'secondary_extend';
+    const hasText = this.shouldDisplayText(isMain, mode) && this.state.viewMode !== 'hide_all';
+
+    // A transparent texel is sufficient when no text is visible, including satellites.
+    this.textCanvas.width = hasText ? width * dpr : 1;
+    this.textCanvas.height = hasText ? height * dpr : 1;
 
     const ctx = this.textCtx;
     ctx.clearRect(0, 0, this.textCanvas.width, this.textCanvas.height);
 
-    const isMain = this.screenRole ? this.screenRole.isMain : true;
-    const mode = this.screenRole ? this.screenRole.mode : 'secondary_extend';
-    const hasText = this.shouldDisplayText(isMain, mode);
-
-    if (!hasText || this.state.viewMode === 'hide_all') {
+    if (!hasText) {
       this.uploadTextTexture();
       return;
     }
@@ -1232,7 +1318,7 @@ class IridescentApp {
     gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
 
     const uniformNames = [
-      'u_resolution', 'u_time', 'u_mouse',
+      'u_resolution', 'u_time', 'u_mouse', 'u_ripples_enabled',
       'u_preset_from', 'u_preset_to', 'u_preset_mix', 'u_bg_weights',
       'u_flow_speed', 'u_dispersion', 'u_grain',
       'u_halftone_scale', 'u_vortex_power', 'u_defocus', 'u_contrast',
@@ -1275,7 +1361,12 @@ class IridescentApp {
     this.textTexture = null;
     if (this.initWebGL()) {
       this.renderTextTexture();
-      this.startRenderLoop();
+      if (this.state.isPaused) {
+        this.isRendering = true;
+        this.render(performance.now());
+      } else {
+        this.startRenderLoop();
+      }
     }
   }
 
@@ -1287,15 +1378,17 @@ class IridescentApp {
       this.updatePresetIndicator(false);
       this.updateBgIndicator(false);
     });
+    // 節流期間若直接關閉或離開頁面，補上最後一次寫入。
+    window.addEventListener('pagehide', () => this.flushSettingsPersistence());
 
     const isUIEventTarget = (target) => target instanceof Element && (
       target.closest('.bottom-dock') || target.closest('.controls-panel') || target.closest('.action-btn')
     );
 
     const updateMousePos = (clientX, clientY) => {
-      const rect = this.canvas.getBoundingClientRect();
-      this.mouse.targetX = (clientX - rect.left) / rect.width;
-      this.mouse.targetY = 1.0 - (clientY - rect.top) / rect.height;
+      const point = this.normalizePointer(clientX, clientY);
+      this.mouse.targetX = point.x;
+      this.mouse.targetY = point.y;
     };
 
     window.addEventListener('mousemove', (e) => {
@@ -1303,22 +1396,25 @@ class IridescentApp {
       const overUI = !!isUIEventTarget(e.target);
       document.body.classList.toggle('cursor-over-ui', overUI);
 
-      // 當按住左鍵在畫布上拖曳時，實時動態延展航跡水波
-      if ((e.buttons & 1) === 1 && !overUI && !this.state.isPaused) {
+      // 按下時先保留手勢，移動超過內部門檻後才建立拖曳線段。
+      if (this.state.dragInteraction && (e.buttons & 1) === 1 && !overUI && !this.state.isPaused) {
         if (!this.isDragging) {
           this.isDragging = true;
           this.startDrag(e.clientX, e.clientY);
         } else {
-          this.updateDrag(e.clientX, e.clientY);
+          this.queueDragUpdate(e.clientX, e.clientY);
         }
       } else if (this.isDragging) {
-        this.endDrag();
+        this.endDrag(true);
       }
     });
 
     window.addEventListener('mousedown', (e) => {
-      if (this.state.isPaused) return;
-      if (isUIEventTarget(e.target)) return;
+      if (e.button !== 0 || this.state.isPaused || isUIEventTarget(e.target)) return;
+      if (!this.state.dragInteraction) {
+        this.addRipple(e.clientX, e.clientY, 0.9);
+        return;
+      }
       this.isDragging = true;
       this.startDrag(e.clientX, e.clientY);
     });
@@ -1328,11 +1424,11 @@ class IridescentApp {
     });
 
     window.addEventListener('mouseleave', () => {
-      if (this.isDragging) this.endDrag();
+      if (this.isDragging) this.endDrag(true);
     });
 
     window.addEventListener('blur', () => {
-      if (this.isDragging) this.endDrag();
+      if (this.isDragging) this.endDrag(true);
     });
 
     window.addEventListener('touchmove', (e) => {
@@ -1340,7 +1436,7 @@ class IridescentApp {
         const t = e.touches[0];
         updateMousePos(t.clientX, t.clientY);
         if (this.isDraggingTouch && !this.state.isPaused && !isUIEventTarget(e.target)) {
-          this.updateDrag(t.clientX, t.clientY);
+          this.queueDragUpdate(t.clientX, t.clientY);
         }
       }
     }, { passive: true });
@@ -1351,6 +1447,10 @@ class IridescentApp {
         const t = e.touches[0];
         if (isUIEventTarget(e.target)) {
           this.isDraggingTouch = false;
+          return;
+        }
+        if (!this.state.dragInteraction) {
+          this.addRipple(t.clientX, t.clientY, 0.9);
           return;
         }
         this.isDraggingTouch = true;
@@ -1364,7 +1464,7 @@ class IridescentApp {
     }, { passive: true });
 
     window.addEventListener('touchcancel', () => {
-      if (this.isDraggingTouch) this.endDrag();
+      if (this.isDraggingTouch) this.endDrag(true);
     }, { passive: true });
 
     window.addEventListener('keydown', (e) => {
@@ -1443,7 +1543,11 @@ class IridescentApp {
       requestAnimationFrame(() => {
         this.updateBgIndicator(false);
         const firstControl = this.controlsPanel.querySelector('input, button, select, textarea');
-        if (firstControl) firstControl.focus({ preventScroll: true });
+        if (!firstControl) return;
+        // 面板的 visibility 要先由 hidden 變成 visible 才聚焦得起來；先讀取
+        // 版面值強制套用樣式，否則 focus() 會靜默失敗（焦點仍留在齒輪按鈕）。
+        void this.controlsPanel.offsetHeight;
+        firstControl.focus({ preventScroll: true });
       });
     } else {
       this.cancelPaletteEdit();
@@ -1504,6 +1608,10 @@ class IridescentApp {
     bindSlider('slider-dispersion', 'dispersion', 'val-dispersion', 1, 1);
     bindSlider('slider-grain', 'grain', 'val-grain', 1, 1);
     bindSlider('slider-cursor', 'cursorInfluence', 'val-cursor', 1, 1);
+    document.getElementById('drag-interaction').addEventListener('change', (event) => {
+      this.setDragInteraction(event.target.checked);
+      this.saveSettings();
+    });
 
     document.querySelectorAll('.palette-color').forEach((input, index) => {
       input.addEventListener('click', (event) => {
@@ -1655,7 +1763,25 @@ class IridescentApp {
     }
   }
 
+  setDragInteraction(enabled) {
+    this.state.dragInteraction = enabled;
+    if (!enabled) {
+      this.endDrag(true);
+      for (let i = 0; i < this.maxRipples; i++) {
+        if (this.ripplesB[i].isSegment > 0.5) this.ripplesA[i].strength = 0;
+      }
+      this.rippleDataA.fill(0);
+      this.rippleDataB.fill(0);
+      // Clear the displayed wake even when the artwork is paused.
+      if (this.state.isPaused && this.gl && !this.contextLost) {
+        this.isRendering = true;
+        this.render(performance.now());
+      }
+    }
+  }
+
   syncUIFromState() {
+    document.getElementById('drag-interaction').checked = this.state.dragInteraction;
     // 1. 同步風格預設按鈕
     const presetBtns = document.querySelectorAll('.preset-btn');
     presetBtns.forEach((b) => {
@@ -1704,8 +1830,9 @@ class IridescentApp {
     const draft = this.paletteEditSnapshot && this.paletteEditDirty
       ? { colors: this.state.customPalette.slice(), enabled: this.state.customPaletteEnabled } : null;
 
-    if (Number.isInteger(settings.preset) && settings.preset >= 0 && settings.preset <= 4) {
-      this.state.presetFrom = this.state.preset;
+    if (Number.isInteger(settings.preset) && settings.preset >= 0 && settings.preset <= 4
+        && settings.preset !== this.state.preset) {
+      this.state.presetFrom = this.presetTransitionSource();
       this.state.presetTo = settings.preset;
       this.state.preset = settings.preset;
       this.state.presetTransition = 0.0;
@@ -1728,6 +1855,9 @@ class IridescentApp {
     }
     if (Number.isFinite(settings.cursorInfluence) && settings.cursorInfluence >= 0 && settings.cursorInfluence <= 5) {
       this.state.cursorInfluence = settings.cursorInfluence;
+    }
+    if (typeof settings.dragInteraction === 'boolean' && settings.dragInteraction !== this.state.dragInteraction) {
+      this.setDragInteraction(settings.dragInteraction);
     }
     if (Array.isArray(settings.customPalette) && settings.customPalette.length === 3) {
       this.updateCustomPalette(settings.customPalette, this.state.customPaletteEnabled);
@@ -1813,9 +1943,15 @@ class IridescentApp {
     }
   }
 
+  // 混色過渡中再切換風格時，要從「目前畫面顯示較多的那一側」接續，否則畫面會
+  // 先瞬間跳成純上一種風格再重新混色。過渡未過半沿用來源、過半則沿用目標。
+  presetTransitionSource() {
+    return this.state.presetTransition > 0.5 ? this.state.presetTo : this.state.presetFrom;
+  }
+
   setPreset(index) {
-    if (index === this.state.preset && this.state.presetTransition >= 1.0) return;
-    this.state.presetFrom = this.state.preset;
+    if (index === this.state.preset) return;
+    this.state.presetFrom = this.presetTransitionSource();
     this.state.presetTo = index;
     this.state.preset = index;
     this.state.presetTransition = 0.0;
@@ -1839,10 +1975,7 @@ class IridescentApp {
 
     const left = activeBtn.offsetLeft;
     const width = activeBtn.offsetWidth;
-    if (width === 0) {
-      requestAnimationFrame(() => this.updatePresetIndicator(animate));
-      return;
-    }
+    if (width === 0) return;
 
     if (!animate) {
       const prevTransition = indicator.style.transition;
@@ -1867,10 +2000,7 @@ class IridescentApp {
 
     const left = activeBtn.offsetLeft;
     const width = activeBtn.offsetWidth;
-    if (width === 0) {
-      requestAnimationFrame(() => this.updateBgIndicator(animate));
-      return;
-    }
+    if (width === 0) return;
 
     if (!animate) {
       const prevTransition = indicator.style.transition;
@@ -1944,6 +2074,8 @@ class IridescentApp {
     }
 
     if (mode === 'normal') {
+      this.updatePresetIndicator(false);
+      this.updateBgIndicator(false);
       this.renderTextTexture();
     } else if (mode === 'hide_buttons') {
       this.setControlsPanelOpen(false);
@@ -1953,8 +2085,7 @@ class IridescentApp {
       this.renderTextTexture();
     }
 
-    if (this.screenRole?.isMain
-      && ['secondary_extend', 'primary_extend'].includes(this.screenRole.mode)
+    if (['secondary_extend', 'primary_extend'].includes(this.screenRole?.mode)
       && window.webkit?.messageHandlers?.macApp) {
       window.webkit.messageHandlers.macApp.postMessage({
         action: 'syncSatelliteControls',
@@ -2013,6 +2144,7 @@ class IridescentApp {
       pauseBtn.setAttribute('aria-pressed', String(this.state.isPaused));
     }
     if (this.state.isPaused) {
+      this.endDrag(true);
       this.state.vortexPower = 0;
       this.mouse.vx = 0;
       this.mouse.vy = 0;
@@ -2050,22 +2182,63 @@ class IridescentApp {
     ctx.drawImage(this.canvas, 0, 0, width, height);
 
     // 2. 觸發下載
-    const link = document.createElement('a');
-    link.download = `Grand-Modern-Prism-${Date.now()}.png`;
-    link.href = exportCanvas.toDataURL('image/png');
-    link.click();
+    // 高解析度畫面用 data URL 會產生數十 MB 字串（Safari 有限制、且 toDataURL
+    // 是同步阻塞），因此優先走 Blob 物件 URL；檔名與 App 版一致。
+    const filename = `Aura-${Date.now()}.png`;
+    const triggerDownload = (href, revoke) => {
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = href;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      if (revoke) setTimeout(() => URL.revokeObjectURL(href), 10000);
+    };
+
+    if (typeof exportCanvas.toBlob === 'function') {
+      exportCanvas.toBlob((blob) => {
+        if (!blob) {
+          triggerDownload(exportCanvas.toDataURL('image/png'), false);
+          return;
+        }
+        triggerDownload(URL.createObjectURL(blob), true);
+      }, 'image/png');
+      return;
+    }
+    triggerDownload(exportCanvas.toDataURL('image/png'), false);
   }
 
   onResize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const width = window.innerWidth;
     const height = window.innerHeight;
+    this.viewportWidth = width;
+    this.viewportHeight = height;
     this.canvas.width = width * dpr;
     this.canvas.height = height * dpr;
     if (this.gl) {
       this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     }
-    this.renderTextTexture();
+    // 視窗拖曳時 resize 會連續觸發，文字紋理改為每個 frame 最多重建一次。
+    this.scheduleTextTextureRender();
+    // Resizing clears the drawing buffer even while the render loop is paused.
+    if (this.state.isPaused && this.gl && !this.contextLost) {
+      this.isRendering = true;
+      this.render(performance.now());
+    }
+  }
+
+  scheduleTextTextureRender() {
+    if (this.textTextureRafId) return;
+    this.textTextureRafId = requestAnimationFrame(() => {
+      this.textTextureRafId = null;
+      this.renderTextTexture();
+      // 暫停狀態下畫面不會自動重繪，需補畫一格才能反映新的文字紋理。
+      if (this.state.isPaused && this.gl && !this.contextLost) {
+        this.isRendering = true;
+        this.render(performance.now());
+      }
+    });
   }
 
   render(timestamp) {
@@ -2143,6 +2316,10 @@ class IridescentApp {
     gl.uniform1f(this.uniforms.u_time, this.time);
     gl.uniform2f(this.uniforms.u_mouse, this.mouse.x, this.mouse.y);
     // 物理擴散水波與連續拖曳航跡數據上載
+    this.retireExpiredRipples();
+    const hasRipples = this.ripplesA.some(ripple => ripple.strength > 0);
+    gl.uniform1i(this.uniforms.u_ripples_enabled, hasRipples ? 1 : 0);
+    if (hasRipples) {
     for (let i = 0; i < this.maxRipples; i++) {
       const a = this.ripplesA[i];
       const b = this.ripplesB[i];
@@ -2161,6 +2338,8 @@ class IridescentApp {
     }
     if (this.uniforms.u_ripples_b) {
       gl.uniform4fv(this.uniforms.u_ripples_b, this.rippleDataB);
+    }
+
     }
 
     // 綁定動態反白文字紋理

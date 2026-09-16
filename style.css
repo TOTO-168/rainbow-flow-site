@@ -50,6 +50,10 @@
   --glass-text-color: #111116;
   --glass-text-muted: rgba(20, 20, 28, 0.70);
   --glass-border-color: rgba(255, 255, 255, 0.75);
+
+  /* 鍵盤焦點外框：淺色主題用深色外框，深色主題覆寫成白色。
+     表單元件的 currentColor 由系統外觀決定，不能拿來當焦點框顏色。 */
+  --focus-ring: rgba(10, 12, 18, 0.72);
 }
 
 body[data-theme="dark"] {
@@ -66,6 +70,7 @@ body[data-theme="dark"] {
   --glass-text-color: #ffffff;
   --glass-text-muted: rgba(255, 255, 255, 0.72);
   --glass-border-color: rgba(255, 255, 255, 0.22);
+  --focus-ring: rgba(255, 255, 255, 0.96);
   --glass-dispersion-shadow:
     -0.8px -0.4px 0.6px rgba(255, 45, 95, 0.35),
     0.8px 0.4px 0.6px rgba(0, 210, 255, 0.35),
@@ -526,7 +531,9 @@ body[data-theme="dark"] #toggle-panel-btn.active {
   transition: 
     opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1),
     transform 0.38s cubic-bezier(0.16, 1, 0.3, 1),
-    visibility 0.35s,
+    /* 開啟時 visibility 立即切換（否則同一 frame 內 focus() 會失敗），
+       關閉時延後到淡出結束才隱藏。 */
+    visibility 0s linear 0.38s,
     box-shadow 0.35s ease;
   box-shadow:
     var(--glass-dispersion-shadow),
@@ -547,6 +554,11 @@ body[data-theme="dark"] .controls-panel {
   visibility: visible;
   transform: translateY(0);
   pointer-events: auto;
+  transition: 
+    opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s linear 0s,
+    box-shadow 0.35s ease;
 }
 
 .controls-panel::-webkit-scrollbar {
@@ -897,10 +909,6 @@ body[data-theme="dark"] .bg-btn.active {
   color: var(--glass-text-color);
 }
 
-.palette-slot:focus-visible {
-  outline-color: rgba(255, 255, 255, 0.96);
-}
-
 .palette-slot-name,
 .palette-slot-status {
   overflow: hidden;
@@ -930,7 +938,9 @@ body[data-theme="dark"] .bg-btn.active {
 .controls-layer button:focus-visible,
 .controls-layer input:focus-visible,
 .palette-color-wrap:focus-within {
-  outline: 2px solid rgba(255, 255, 255, 0.96);
+  /* 依主題切換：紙白／水墨用深色外框、深色主題用白色外框，避免白色外框
+     畫在白玻璃面板上完全看不見。 */
+  outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
 }
 
@@ -1000,3 +1010,73 @@ body.satellite-screen .bottom-dock,
 body.satellite-screen .controls-panel {
   display: none !important;
 }
+
+/* 副螢幕在按 Esc 展開控制列時，只提供該螢幕的截圖按鈕。 */
+body.satellite-screen.satellite-controls-visible .bottom-dock {
+  display: flex !important;
+  justify-content: flex-end;
+}
+
+body.satellite-screen.satellite-controls-visible .bottom-dock .preset-switcher,
+body.satellite-screen.satellite-controls-visible .bottom-dock #hide-buttons-btn,
+body.satellite-screen.satellite-controls-visible .bottom-dock #hide-all-btn,
+body.satellite-screen.satellite-controls-visible .bottom-dock #pause-btn,
+body.satellite-screen.satellite-controls-visible .bottom-dock .panel-anchor-wrapper {
+  display: none !important;
+}
+
+body.satellite-screen.satellite-controls-visible .bottom-dock .dock-actions {
+  gap: 0;
+  justify-content: flex-end;
+}
+
+body.satellite-screen.satellite-controls-visible .bottom-dock .dock-actions-container {
+  margin-left: auto;
+}
+
+body.satellite-screen.satellite-controls-visible .bottom-dock #capture-btn {
+  display: inline-flex !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+.drag-interaction-row {
+  min-height: 44px;
+  align-items: center;
+  cursor: pointer;
+}
+/* Reduce only the gap below the interaction row: 1.35rem × 70% = 0.945rem. */
+.settings-section[aria-labelledby="effects-section-title"] + .settings-section {
+  margin-top: -0.405rem;
+}
+#drag-interaction {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 26px;
+  margin: 0;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+#drag-interaction::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: currentColor;
+  transition: transform 180ms ease-out;
+}
+#drag-interaction:checked { background: var(--color-accent); color: var(--color-dark); }
+#drag-interaction:checked::before { transform: translateX(16px); }
+@media (prefers-reduced-motion: reduce) {
+  #drag-interaction::before { transition: none; }
+}
+#drag-interaction:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
