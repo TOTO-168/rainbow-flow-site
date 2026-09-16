@@ -926,6 +926,8 @@ class IridescentApp {
     this.rafId = null;
     this.isRendering = false;
     this.contextLost = false;
+    // 螢幕休眠或系統鎖定時由原生端暫停算圖，與使用者的「暫停畫面」互不影響。
+    this.renderSuspended = false;
 
     // 螢幕主從角色與外接螢幕設定 (預設為副螢幕延伸: 主螢幕文字，副螢幕純淨)
     const screenInfo = window.__SCREEN_INFO__ || { isMain: true, mode: 'secondary_extend' };
@@ -2159,7 +2161,7 @@ class IridescentApp {
   }
 
   startRenderLoop() {
-    if (this.isRendering || this.contextLost || this.state.isPaused || !this.gl) return;
+    if (this.isRendering || this.contextLost || this.state.isPaused || this.renderSuspended || !this.gl) return;
     this.isRendering = true;
     this.rafId = requestAnimationFrame((timestamp) => this.render(timestamp));
   }
@@ -2168,6 +2170,28 @@ class IridescentApp {
     if (this.rafId !== null) cancelAnimationFrame(this.rafId);
     this.rafId = null;
     this.isRendering = false;
+  }
+
+  // 螢幕休眠／螢幕鎖定時暫停算圖：畫面此時完全不可見，繼續以 60fps 計算
+  // 只會消耗 GPU 與電力。與「暫停畫面」不同，這裡不會改變使用者的暫停狀態。
+  suspendRendering() {
+    if (this.renderSuspended) return;
+    this.renderSuspended = true;
+    this.stopRenderLoop();
+  }
+
+  resumeRendering() {
+    if (!this.renderSuspended) return;
+    this.renderSuspended = false;
+    if (this.state.isPaused) {
+      // 使用者原本就暫停畫面：喚醒後只需補畫凍結的一格。
+      if (this.gl && !this.contextLost) {
+        this.isRendering = true;
+        this.render(performance.now());
+      }
+      return;
+    }
+    this.startRenderLoop();
   }
 
   capturePoster() {
@@ -2244,6 +2268,11 @@ class IridescentApp {
   render(timestamp) {
     this.rafId = null;
     if (!this.isRendering || this.contextLost) return;
+    // 休眠／鎖定期間不畫任何一格，包含 resize 與文字紋理觸發的補畫。
+    if (this.renderSuspended) {
+      this.isRendering = false;
+      return;
+    }
     const gl = this.gl;
     if (!gl) {
       this.isRendering = false;
@@ -2373,7 +2402,7 @@ class IridescentApp {
       }
     }
 
-    if (this.isRendering && !this.state.isPaused && !this.contextLost) {
+    if (this.isRendering && !this.state.isPaused && !this.renderSuspended && !this.contextLost) {
       this.rafId = requestAnimationFrame((t) => this.render(t));
     } else {
       this.isRendering = false;
@@ -2393,6 +2422,17 @@ window.addEventListener('DOMContentLoaded', () => {
     resume: () => {
       if (window.appInstance) {
         window.appInstance.setPaused(false);
+      }
+    },
+    // 顯示器休眠或系統鎖定時由原生端呼叫，避免在畫面不可見時持續算圖。
+    suspendRendering: () => {
+      if (window.appInstance) {
+        window.appInstance.suspendRendering();
+      }
+    },
+    resumeRendering: () => {
+      if (window.appInstance) {
+        window.appInstance.resumeRendering();
       }
     },
     setScreensaverMode: (isMain = true, mode = 'secondary_extend') => {
