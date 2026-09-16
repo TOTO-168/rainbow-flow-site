@@ -1,5 +1,5 @@
 {
-  "version": "1.2.27",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.27/Aura.zip",
-  "notes": "穩定性與體驗修正：隔離執行防護、前景被搶走時收回 Esc 控制、淺色主題焦點外框、設定抽屜焦點、海報匯出與風格切換閃跳。"
+  "version": "1.2.28",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.28/Aura.zip",
+  "notes": "顯示器休眠或鎖定畫面時自動停止算圖，喚醒後立即恢復，畫面不可見時不再持續消耗 GPU 與電力。"
 }
