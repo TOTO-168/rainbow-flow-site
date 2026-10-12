@@ -1,5 +1,5 @@
 {
-  "version": "1.2.29",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.29/Aura.zip",
-  "notes": "多螢幕共用同一個背景特效渲染，減少重複的 GPU 運算；保留各螢幕文字、互動、暫停與海報匯出，並改善共用畫面的復原處理。"
+  "version": "1.2.30",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.30/Aura.zip",
+  "notes": "修正更新完成後卡在「即將重新啟動」的問題；退出前先儲存設定，避免退出程序互相等待，並保留多螢幕共用渲染。"
 }
