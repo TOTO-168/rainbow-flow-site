@@ -21,6 +21,7 @@ const fragmentShaderSource = `
   varying vec2 v_uv;
 
   uniform vec2 u_resolution;
+  uniform bool u_shared_background;
   uniform float u_time;
   uniform vec2 u_mouse;
   uniform bool u_ripples_enabled;
@@ -684,6 +685,12 @@ const fragmentShaderSource = `
     // 關鍵設計：反白判定嚴格依據宏觀光影 (macroScene)，灰塵噪波微粒不觸發文字反白
     // 亮底顯墨黑，暗底顯純白，字符純粹無噪點穿透
     // ----------------------------------------------------------------------
+    if (u_shared_background) {
+      // Preserve the grain-free text contrast decision without a second effects pass.
+      float contrastMask = dot(macroScene, vec3(0.299, 0.587, 0.114)) > 0.46 ? 1.0 : 0.5;
+      gl_FragColor = vec4(sceneWithDust, contrastMask);
+      return;
+    }
     vec4 textSample = texture2D(u_text_texture, uv);
     if (textSample.a > 0.005) {
       // 僅依據宏觀流光、暗影與底色的感知亮度，灰塵微粒不參與反白計算
@@ -771,7 +778,8 @@ class IridescentApp {
   }
 
   saveSettings() {
-    const committedPalette = this.paletteEditSnapshot || {
+    const source = this.sharedSource || this;
+    const committedPalette = source.sharedPaletteEditor?.paletteEditSnapshot || this.paletteEditSnapshot || {
       colors: this.state.customPalette,
       enabled: this.state.customPaletteEnabled
     };
@@ -788,6 +796,12 @@ class IridescentApp {
       customPaletteSlots: this.state.customPaletteSlots.map((slot) => slot.slice())
     };
     this.lastSettingsSave = { settings: current, savedAt: Date.now() };
+    if (this.sharedRendering) {
+      for (const display of [source, ...source.sharedDisplays]) {
+        if (display !== this) display.syncUIFromState();
+      }
+      this.invalidateSharedArtwork();
+    }
 
     // 快照一律同步更新（退出或更新前，原生端一定讀得到最新數值），但實際寫入
     // 與跨螢幕廣播採「首發立即 + 尾端補寫」節流：拖曳滑桿時每毫秒都可能觸發
@@ -936,7 +950,80 @@ class IridescentApp {
       document.body.classList.add('satellite-screen');
     }
 
+    this.sharedDisplays = new Set();
+    if (window.__SCREEN_INFO__?.sharedRendering && typeof this.canvas.captureStream === 'function') this.initSharedRendering();
     this.init();
+  }
+
+  initSharedRendering() {
+    this.displayCanvas = this.canvas;
+    this.sharedRendering = true;
+    if (this.screenRole.isMain) {
+      this.canvas = document.createElement('canvas');
+      return;
+    }
+    const source = window.opener?.appInstance;
+    if (!source?.sharedRenderer || source.sharedSource) throw new Error('共用背景尚未準備完成');
+    this.sharedSource = source;
+    // Artwork state is shared; visibility and palette edit transactions stay local.
+    const localState = this.state;
+    this.state = new Proxy(localState, {
+      get: (target, key) => key === 'viewMode' ? target[key] : source.state[key],
+      set: (target, key, value) => {
+        (key === 'viewMode' ? target : source.state)[key] = value;
+        return true;
+      }
+    });
+    this.mouse = source.mouse;
+    for (const method of ['addRipple', 'startDrag', 'queueDragUpdate']) {
+      this[method] = (x, y, ...args) => {
+        const point = this.normalizePointer(x, y);
+        if (method === 'startDrag') source.isDragging = true;
+        return source[method](point.x * source.viewportWidth, (1 - point.y) * source.viewportHeight, ...args);
+      };
+    }
+    this.endDrag = (cancelled = false) => {
+      this.isDragging = this.isDraggingTouch = false;
+      source.endDrag(cancelled);
+    };
+    source.sharedDisplays.add(this);
+    source.sharedRenderer.addDisplay(this);
+  }
+
+  invalidateSharedArtwork() {
+    const source = this.sharedSource || this;
+    if (!source.sharedRenderer || !source.state.isPaused || source.renderSuspended || source.contextLost) return;
+    source.state.presetTransition = 1;
+    source.state.bgWeights = source.state.targetBgWeights.slice();
+    source.customPaletteRGB = source.customPaletteTargetRGB.map(color => color.slice());
+    source.isRendering = true;
+    source.render(performance.now());
+  }
+
+  presentSharedFrame() {
+    const source = this.sharedSource || this;
+    if (source.renderSuspended || !source.sharedRenderer) return;
+    source.sharedRenderer.present();
+  }
+
+  notifyFirstFrame() {
+    if (this.hasNotifiedFirstFrame) return;
+    this.hasNotifiedFirstFrame = true;
+    window.webkit?.messageHandlers?.macApp?.postMessage({ action: 'firstFrameReady' });
+  }
+
+  disposeSharedRendering() {
+    this.stopRenderLoop();
+    this.endDrag(true);
+    if (this.textTextureRafId !== null) cancelAnimationFrame(this.textTextureRafId);
+    this.sharedSource?.sharedDisplays.delete(this);
+    this.sharedDisplays.clear();
+    if (this.sharedVideo) {
+      this.sharedVideo.pause();
+      this.sharedVideo.srcObject = null;
+      this.sharedVideo.remove();
+    }
+    this.sharedRenderer?.dispose();
   }
 
   shouldDisplayText(isMain, mode) {
@@ -1077,10 +1164,16 @@ class IridescentApp {
   normalizePointer(clientX, clientY) {
     const width = this.viewportWidth || window.innerWidth || 1;
     const height = this.viewportHeight || window.innerHeight || 1;
-    return {
+    const point = {
       x: Math.max(0.0, Math.min(1.0, clientX / width)),
       y: Math.max(0.0, Math.min(1.0, 1.0 - clientY / height))
     };
+    if (this.sharedSource) {
+      const crop = SharedRenderer.crop(this.sharedSource.outputWidth, this.sharedSource.outputHeight, width, height);
+      point.x = (point.x - 0.5) * crop[0] + 0.5;
+      point.y = (point.y - 0.5) * crop[1] + 0.5;
+    }
+    return point;
   }
 
   queueDragUpdate(clientX, clientY) {
@@ -1139,6 +1232,7 @@ class IridescentApp {
       this.textTexture = gl.createTexture();
     }
 
+    gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.textTexture);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.textCanvas);
@@ -1146,6 +1240,7 @@ class IridescentApp {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    if (this.hasNotifiedFirstFrame) this.presentSharedFrame();
   }
 
   renderTextTexture() {
@@ -1263,9 +1358,13 @@ class IridescentApp {
   }
 
   initWebGL() {
+    if (this.sharedSource) {
+      this.gl = this.sharedSource.gl;
+      return true;
+    }
     const gl = this.canvas.getContext('webgl', {
       alpha: false,
-      antialias: true,
+      antialias: !this.sharedRendering,
       preserveDrawingBuffer: true,
       powerPreference: 'high-performance'
     });
@@ -1288,6 +1387,7 @@ class IridescentApp {
     const program = gl.createProgram();
     gl.attachShader(program, vertShader);
     gl.attachShader(program, fragShader);
+    gl.bindAttribLocation(program, 0, 'a_position');
     gl.linkProgram(program);
 
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
@@ -1320,7 +1420,7 @@ class IridescentApp {
     gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
 
     const uniformNames = [
-      'u_resolution', 'u_time', 'u_mouse', 'u_ripples_enabled',
+      'u_resolution', 'u_shared_background', 'u_time', 'u_mouse', 'u_ripples_enabled',
       'u_preset_from', 'u_preset_to', 'u_preset_mix', 'u_bg_weights',
       'u_flow_speed', 'u_dispersion', 'u_grain',
       'u_halftone_scale', 'u_vortex_power', 'u_defocus', 'u_contrast',
@@ -1333,6 +1433,7 @@ class IridescentApp {
     this.uniforms.u_ripples_a = gl.getUniformLocation(program, 'u_ripples_a[0]') || gl.getUniformLocation(program, 'u_ripples_a');
     this.uniforms.u_ripples_b = gl.getUniformLocation(program, 'u_ripples_b[0]') || gl.getUniformLocation(program, 'u_ripples_b');
     this.uniforms.u_text_texture = gl.getUniformLocation(program, 'u_text_texture');
+    if (this.sharedRendering) this.sharedRenderer = new SharedRenderer(this, this.sharedRenderer?.stream);
     return true;
   }
 
@@ -1361,7 +1462,20 @@ class IridescentApp {
     this.program = null;
     this.uniforms = {};
     this.textTexture = null;
+    if (this.sharedRendering) {
+      // Context restoration invalidates GL objects; keep the live display stream attached.
+      for (const display of [this, ...this.sharedDisplays]) display.textTexture = null;
+      this.hasSharedBackground = false;
+    }
     if (this.initWebGL()) {
+      if (this.sharedRendering) {
+        for (const display of this.sharedDisplays) {
+          display.gl = this.gl;
+          this.sharedRenderer.addDisplay(display);
+          display.renderTextTexture();
+        }
+        this.sharedRenderer.resize();
+      }
       this.renderTextTexture();
       if (this.state.isPaused) {
         this.isRendering = true;
@@ -1373,15 +1487,18 @@ class IridescentApp {
   }
 
   setupEventListeners() {
-    this.canvas.addEventListener('webglcontextlost', (event) => this.handleWebGLContextLost(event));
-    this.canvas.addEventListener('webglcontextrestored', () => this.handleWebGLContextRestored());
+    if (!this.sharedSource) this.canvas.addEventListener('webglcontextlost', (event) => this.handleWebGLContextLost(event));
+    if (!this.sharedSource) this.canvas.addEventListener('webglcontextrestored', () => this.handleWebGLContextRestored());
     window.addEventListener('resize', () => {
       this.onResize();
       this.updatePresetIndicator(false);
       this.updateBgIndicator(false);
     });
     // 節流期間若直接關閉或離開頁面，補上最後一次寫入。
-    window.addEventListener('pagehide', () => this.flushSettingsPersistence());
+    window.addEventListener('pagehide', () => {
+      this.flushSettingsPersistence();
+      this.disposeSharedRendering();
+    });
 
     const isUIEventTarget = (target) => target instanceof Element && (
       target.closest('.bottom-dock') || target.closest('.controls-panel') || target.closest('.action-btn')
@@ -1766,6 +1883,7 @@ class IridescentApp {
   }
 
   setDragInteraction(enabled) {
+    if (this.sharedSource) return this.sharedSource.setDragInteraction(enabled);
     this.state.dragInteraction = enabled;
     if (!enabled) {
       this.endDrag(true);
@@ -1880,6 +1998,11 @@ class IridescentApp {
 
   beginPaletteEdit() {
     if (this.paletteEditSnapshot) return;
+    if (this.sharedRendering) {
+      const source = this.sharedSource || this;
+      source.sharedPaletteEditor?.cancelPaletteEdit();
+      source.sharedPaletteEditor = this;
+    }
     this.paletteEditSnapshot = {
       colors: this.state.customPalette.slice(),
       enabled: this.state.customPaletteEnabled
@@ -1887,6 +2010,8 @@ class IridescentApp {
   }
 
   commitPaletteEdit() {
+    const source = this.sharedSource || this;
+    if (source.sharedPaletteEditor === this) source.sharedPaletteEditor = null;
     this.paletteEditSnapshot = null;
     this.paletteEditDirty = false;
     this.syncCustomPaletteInputs();
@@ -1895,6 +2020,8 @@ class IridescentApp {
   cancelPaletteEdit() {
     if (!this.paletteEditSnapshot) return;
     const { colors, enabled } = this.paletteEditSnapshot;
+    const source = this.sharedSource || this;
+    if (source.sharedPaletteEditor === this) source.sharedPaletteEditor = null;
     this.paletteEditSnapshot = null;
     this.paletteEditDirty = false;
     this.updateCustomPalette(colors, enabled);
@@ -1906,6 +2033,8 @@ class IridescentApp {
     this.state.customPalette = colors.map((color, index) => this.normalizeHexColor(color, defaults[index]));
     this.state.customPaletteEnabled = enabled === true;
     this.customPaletteTargetRGB = this.state.customPalette.map((color) => this.hexToRgb(color));
+    if (this.sharedSource) this.sharedSource.customPaletteTargetRGB = this.customPaletteTargetRGB;
+    this.invalidateSharedArtwork();
     this.syncCustomPaletteInputs();
     return true;
   }
@@ -2136,7 +2265,9 @@ class IridescentApp {
     this.setViewMode('hide_all');
   }
 
-  setPaused(paused) {
+  setPaused(paused, synchronize = true) {
+    if (this.sharedSource && synchronize) return this.sharedSource.setPaused(paused);
+    if (synchronize) this.sharedDisplays?.forEach(display => display.setPaused(paused, false));
     this.state.isPaused = !!paused;
     const pauseBtn = document.getElementById('pause-btn');
     if (pauseBtn) {
@@ -2161,6 +2292,10 @@ class IridescentApp {
   }
 
   startRenderLoop() {
+    if (this.sharedSource) {
+      this.presentSharedFrame();
+      return;
+    }
     if (this.isRendering || this.contextLost || this.state.isPaused || this.renderSuspended || !this.gl) return;
     this.isRendering = true;
     this.rafId = requestAnimationFrame((timestamp) => this.render(timestamp));
@@ -2194,16 +2329,18 @@ class IridescentApp {
     this.startRenderLoop();
   }
 
-  capturePoster() {
-    const exportCanvas = document.createElement('canvas');
-    const width = this.canvas.width;
-    const height = this.canvas.height;
-    exportCanvas.width = width;
-    exportCanvas.height = height;
-    const ctx = exportCanvas.getContext('2d');
+  createPosterCanvas() {
+    const source = this.sharedSource || this;
+    if (source.sharedRenderer) return source.sharedRenderer.capture(this);
+    const canvas = document.createElement('canvas');
+    canvas.width = this.canvas.width;
+    canvas.height = this.canvas.height;
+    canvas.getContext('2d').drawImage(this.canvas, 0, 0);
+    return canvas;
+  }
 
-    // 1. 繪製 WebGL 原圖 (已內嵌純黑白精準反白排版)
-    ctx.drawImage(this.canvas, 0, 0, width, height);
+  capturePoster() {
+    const exportCanvas = this.createPosterCanvas();
 
     // 2. 觸發下載
     // 高解析度畫面用 data URL 會產生數十 MB 字串（Safari 有限制、且 toDataURL
@@ -2238,9 +2375,15 @@ class IridescentApp {
     const height = window.innerHeight;
     this.viewportWidth = width;
     this.viewportHeight = height;
-    this.canvas.width = width * dpr;
-    this.canvas.height = height * dpr;
-    if (this.gl) {
+    if (this.sharedRendering) {
+      this.outputWidth = Math.round(width * dpr);
+      this.outputHeight = Math.round(height * dpr);
+      (this.sharedSource || this).sharedRenderer.resize();
+    } else {
+      this.canvas.width = width * dpr;
+      this.canvas.height = height * dpr;
+    }
+    if (this.gl && !this.sharedRendering) {
       this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     }
     // 視窗拖曳時 resize 會連續觸發，文字紋理改為每個 frame 最多重建一次。
@@ -2267,6 +2410,11 @@ class IridescentApp {
 
   render(timestamp) {
     this.rafId = null;
+    if (this.sharedSource) {
+      this.isRendering = false;
+      this.presentSharedFrame();
+      return;
+    }
     if (!this.isRendering || this.contextLost) return;
     // 休眠／鎖定期間不畫任何一格，包含 resize 與文字紋理觸發的補畫。
     if (this.renderSuspended) {
@@ -2341,7 +2489,8 @@ class IridescentApp {
       }
     }
 
-    gl.uniform2f(this.uniforms.u_resolution, this.canvas.width, this.canvas.height);
+    if (this.sharedRenderer) this.sharedRenderer.begin();
+    gl.uniform2f(this.uniforms.u_resolution, this.outputWidth || this.canvas.width, this.outputHeight || this.canvas.height);
     gl.uniform1f(this.uniforms.u_time, this.time);
     gl.uniform2f(this.uniforms.u_mouse, this.mouse.x, this.mouse.y);
     // 物理擴散水波與連續拖曳航跡數據上載
@@ -2393,9 +2542,14 @@ class IridescentApp {
     gl.uniform3fv(this.uniforms.u_custom_palette_b, this.customPaletteRGB[1]);
     gl.uniform3fv(this.uniforms.u_custom_palette_c, this.customPaletteRGB[2]);
     gl.uniform1f(this.uniforms.u_custom_palette_enabled, this.state.customPaletteEnabled ? 1.0 : 0.0);
+    gl.uniform1i(this.uniforms.u_shared_background, this.sharedRenderer ? 1 : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+    if (this.sharedRenderer) {
+      this.hasSharedBackground = true;
+      this.sharedRenderer.present();
+    }
 
-    if (!this.hasNotifiedFirstFrame) {
+    if (!this.sharedRendering && !this.hasNotifiedFirstFrame) {
       this.hasNotifiedFirstFrame = true;
       if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.macApp) {
         window.webkit.messageHandlers.macApp.postMessage({ action: 'firstFrameReady' });
