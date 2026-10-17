@@ -1,5 +1,5 @@
 {
-  "version": "1.2.30",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.30/Aura.zip",
-  "notes": "修正更新完成後卡在「即將重新啟動」的問題；退出前先儲存設定，避免退出程序互相等待，並保留多螢幕共用渲染。"
+  "version": "1.2.31",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.31/Aura.zip",
+  "notes": "修正多螢幕副螢幕點擊與拖曳手勢被主視窗失焦中斷、暫停畫面時切換底色與調整參數未即時更新的問題；優化退出淡出滑鼠穿透、靜默更新檢查與背景閒置偵測效能。"
 }

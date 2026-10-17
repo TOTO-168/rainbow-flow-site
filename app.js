@@ -800,8 +800,8 @@ class IridescentApp {
       for (const display of [source, ...source.sharedDisplays]) {
         if (display !== this) display.syncUIFromState();
       }
-      this.invalidateSharedArtwork();
     }
+    this.invalidateSharedArtwork();
 
     // 快照一律同步更新（退出或更新前，原生端一定讀得到最新數值），但實際寫入
     // 與跨螢幕廣播採「首發立即 + 尾端補寫」節流：拖曳滑桿時每毫秒都可能觸發
@@ -955,47 +955,62 @@ class IridescentApp {
     this.init();
   }
 
+  notifySharedRenderingError(error) {
+    console.error('Shared rendering failed:', error);
+    window.webkit?.messageHandlers?.macApp?.postMessage({ action: 'sharedRenderingError' });
+  }
+
   initSharedRendering() {
-    this.displayCanvas = this.canvas;
-    this.sharedRendering = true;
-    if (this.screenRole.isMain) {
-      this.canvas = document.createElement('canvas');
-      return;
-    }
-    const source = window.opener?.appInstance;
-    if (!source?.sharedRenderer || source.sharedSource) throw new Error('共用背景尚未準備完成');
-    this.sharedSource = source;
-    // Artwork state is shared; visibility and palette edit transactions stay local.
-    const localState = this.state;
-    this.state = new Proxy(localState, {
-      get: (target, key) => key === 'viewMode' ? target[key] : source.state[key],
-      set: (target, key, value) => {
-        (key === 'viewMode' ? target : source.state)[key] = value;
-        return true;
+    try {
+      this.displayCanvas = this.canvas;
+      this.sharedRendering = true;
+      if (this.screenRole.isMain) {
+        this.canvas = document.createElement('canvas');
+        return;
       }
-    });
-    this.mouse = source.mouse;
-    for (const method of ['addRipple', 'startDrag', 'queueDragUpdate']) {
-      this[method] = (x, y, ...args) => {
-        const point = this.normalizePointer(x, y);
-        if (method === 'startDrag') source.isDragging = true;
-        return source[method](point.x * source.viewportWidth, (1 - point.y) * source.viewportHeight, ...args);
+      const source = window.opener?.appInstance;
+      if (!source?.sharedRenderer || source.sharedSource) throw new Error('共用背景尚未準備完成');
+      this.sharedSource = source;
+      // Artwork state is shared; visibility and palette edit transactions stay local.
+      const localState = this.state;
+      this.state = new Proxy(localState, {
+        get: (target, key) => key === 'viewMode' ? target[key] : source.state[key],
+        set: (target, key, value) => {
+          (key === 'viewMode' ? target : source.state)[key] = value;
+          return true;
+        }
+      });
+      this.mouse = source.mouse;
+      for (const method of ['addRipple', 'startDrag', 'queueDragUpdate']) {
+        this[method] = (x, y, ...args) => {
+          const point = this.normalizePointer(x, y);
+          if (method === 'startDrag') source.isDragging = true;
+          const result = source[method](point.x * source.viewportWidth, (1 - point.y) * source.viewportHeight, ...args);
+          if (method === 'startDrag') source.dragOwner = this;
+          return result;
+        };
+      }
+      this.endDrag = (cancelled = false) => {
+        this.isDragging = this.isDraggingTouch = false;
+        if (!source.dragOwner || source.dragOwner === this) {
+          source.endDrag(cancelled);
+        }
       };
+      source.sharedDisplays.add(this);
+      source.sharedRenderer.addDisplay(this);
+    } catch (error) {
+      this.notifySharedRenderingError(error);
+      throw error;
     }
-    this.endDrag = (cancelled = false) => {
-      this.isDragging = this.isDraggingTouch = false;
-      source.endDrag(cancelled);
-    };
-    source.sharedDisplays.add(this);
-    source.sharedRenderer.addDisplay(this);
   }
 
   invalidateSharedArtwork() {
     const source = this.sharedSource || this;
-    if (!source.sharedRenderer || !source.state.isPaused || source.renderSuspended || source.contextLost) return;
+    if (!source.gl || !source.state.isPaused || source.renderSuspended || source.contextLost) return;
     source.state.presetTransition = 1;
     source.state.bgWeights = source.state.targetBgWeights.slice();
     source.customPaletteRGB = source.customPaletteTargetRGB.map(color => color.slice());
+    source.updateThemeClass();
     source.isRendering = true;
     source.render(performance.now());
   }
@@ -1015,15 +1030,26 @@ class IridescentApp {
   disposeSharedRendering() {
     this.stopRenderLoop();
     this.endDrag(true);
-    if (this.textTextureRafId !== null) cancelAnimationFrame(this.textTextureRafId);
+    if (this.textTextureRafId !== null) {
+      cancelAnimationFrame(this.textTextureRafId);
+      this.textTextureRafId = null;
+    }
+    if (this.gl && this.textTexture) {
+      this.gl.deleteTexture(this.textTexture);
+      this.textTexture = null;
+    }
     this.sharedSource?.sharedDisplays.delete(this);
     this.sharedDisplays.clear();
     if (this.sharedVideo) {
       this.sharedVideo.pause();
       this.sharedVideo.srcObject = null;
       this.sharedVideo.remove();
+      this.sharedVideo = null;
     }
-    this.sharedRenderer?.dispose();
+    if (this.sharedRenderer) {
+      this.sharedRenderer.dispose();
+      this.sharedRenderer = null;
+    }
   }
 
   shouldDisplayText(isMain, mode) {
@@ -1078,6 +1104,7 @@ class IridescentApp {
     if (!this.state.dragInteraction || this.state.isPaused) return;
     const { x, y } = this.normalizePointer(clientX, clientY);
     // Keep the press pending. Movement creates a segment; release creates a click ripple.
+    this.dragOwner = this;
     this.currentDragSlot = -1;
     this.dragProducedSegment = false;
     this.dragSmoothed = { clientX, clientY, x, y };
@@ -1150,6 +1177,11 @@ class IridescentApp {
       this.updateDrag(finalPoint.clientX, finalPoint.clientY);
     }
     const clickPoint = !this.dragProducedSegment ? this.lastDragAnchor : null;
+    if (this.dragOwner && this.dragOwner !== this) {
+      this.dragOwner.isDragging = false;
+      this.dragOwner.isDraggingTouch = false;
+    }
+    this.dragOwner = null;
     this.isDragging = false;
     this.isDraggingTouch = false;
     this.currentDragSlot = -1;
@@ -1433,7 +1465,14 @@ class IridescentApp {
     this.uniforms.u_ripples_a = gl.getUniformLocation(program, 'u_ripples_a[0]') || gl.getUniformLocation(program, 'u_ripples_a');
     this.uniforms.u_ripples_b = gl.getUniformLocation(program, 'u_ripples_b[0]') || gl.getUniformLocation(program, 'u_ripples_b');
     this.uniforms.u_text_texture = gl.getUniformLocation(program, 'u_text_texture');
-    if (this.sharedRendering) this.sharedRenderer = new SharedRenderer(this, this.sharedRenderer?.stream);
+    if (this.sharedRendering) {
+      try {
+        this.sharedRenderer = new SharedRenderer(this, this.sharedRenderer?.stream);
+      } catch (error) {
+        this.notifySharedRenderingError(error);
+        throw error;
+      }
+    }
     return true;
   }
 
@@ -1469,12 +1508,17 @@ class IridescentApp {
     }
     if (this.initWebGL()) {
       if (this.sharedRendering) {
-        for (const display of this.sharedDisplays) {
-          display.gl = this.gl;
-          this.sharedRenderer.addDisplay(display);
-          display.renderTextTexture();
+        try {
+          for (const display of this.sharedDisplays) {
+            display.gl = this.gl;
+            this.sharedRenderer.addDisplay(display);
+            display.renderTextTexture();
+          }
+          this.sharedRenderer.resize();
+        } catch (error) {
+          this.notifySharedRenderingError(error);
+          throw error;
         }
-        this.sharedRenderer.resize();
       }
       this.renderTextTexture();
       if (this.state.isPaused) {
@@ -1517,13 +1561,13 @@ class IridescentApp {
 
       // 按下時先保留手勢，移動超過內部門檻後才建立拖曳線段。
       if (this.state.dragInteraction && (e.buttons & 1) === 1 && !overUI && !this.state.isPaused) {
-        if (!this.isDragging) {
+        if (!this.isDragging || (this.dragOwner && this.dragOwner !== this)) {
           this.isDragging = true;
           this.startDrag(e.clientX, e.clientY);
         } else {
           this.queueDragUpdate(e.clientX, e.clientY);
         }
-      } else if (this.isDragging) {
+      } else if (this.isDragging && (!this.dragOwner || this.dragOwner === this)) {
         this.endDrag(true);
       }
     });
@@ -1539,15 +1583,15 @@ class IridescentApp {
     });
 
     window.addEventListener('mouseup', () => {
-      if (this.isDragging) this.endDrag();
+      if (this.isDragging && (!this.dragOwner || this.dragOwner === this)) this.endDrag();
     });
 
     window.addEventListener('mouseleave', () => {
-      if (this.isDragging) this.endDrag(true);
+      if (this.isDragging && (!this.dragOwner || this.dragOwner === this)) this.endDrag(true);
     });
 
     window.addEventListener('blur', () => {
-      if (this.isDragging) this.endDrag(true);
+      if (this.isDragging && (!this.dragOwner || this.dragOwner === this)) this.endDrag(true);
     });
 
     window.addEventListener('touchmove', (e) => {
@@ -1827,6 +1871,7 @@ class IridescentApp {
         this.state.lightMode = mode;
         this.state.targetBgWeights = [0.0, 0.0, 0.0, 0.0, 0.0];
         this.state.targetBgWeights[mode] = 1.0;
+        if (this.state.isPaused) this.updateThemeClass();
         this.updateBgIndicator(true);
         this.saveSettings();
       });
@@ -2378,7 +2423,12 @@ class IridescentApp {
     if (this.sharedRendering) {
       this.outputWidth = Math.round(width * dpr);
       this.outputHeight = Math.round(height * dpr);
-      (this.sharedSource || this).sharedRenderer.resize();
+      try {
+        (this.sharedSource || this).sharedRenderer.resize();
+      } catch (error) {
+        this.notifySharedRenderingError(error);
+        throw error;
+      }
     } else {
       this.canvas.width = width * dpr;
       this.canvas.height = height * dpr;

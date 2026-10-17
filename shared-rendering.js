@@ -100,6 +100,10 @@ class SharedRenderer {
       });
     }
     const sourceWidth = this.app.outputWidth, sourceHeight = this.app.outputHeight;
+    for (const display of displays) {
+      const rect = display.sharedRect;
+      display.crop = SharedRenderer.crop(sourceWidth, sourceHeight, rect.width, rect.height);
+    }
     if (this.width !== sourceWidth || this.height !== sourceHeight) {
       this.width = sourceWidth; this.height = sourceHeight;
       gl.activeTexture(gl.TEXTURE0);
@@ -121,13 +125,13 @@ class SharedRenderer {
 
   present() {
     const gl = this.gl;
-    if (gl.isContextLost() || !this.app.hasSharedBackground) return;
+    if (this.disposed || gl.isContextLost() || !this.app.hasSharedBackground) return;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.useProgram(this.program);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    const theme = this.app.displayCanvas.ownerDocument.body.dataset.theme;
     for (const display of this.displays) {
-      const theme = this.app.displayCanvas.ownerDocument.body.dataset.theme;
       const body = display.displayCanvas.ownerDocument.body;
       if (body.dataset.theme !== theme) body.dataset.theme = theme;
       const rect = display.sharedRect;
@@ -135,7 +139,8 @@ class SharedRenderer {
       gl.viewport(rect.x, this.app.canvas.height - rect.y - rect.height, rect.width, rect.height);
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, display.textTexture);
-      gl.uniform2f(this.cropUniform, ...SharedRenderer.crop(this.width, this.height, rect.width, rect.height));
+      const crop = display.crop || SharedRenderer.crop(this.width, this.height, rect.width, rect.height);
+      gl.uniform2f(this.cropUniform, crop[0], crop[1]);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
     this.track?.requestFrame?.();
@@ -150,10 +155,17 @@ class SharedRenderer {
   }
 
   dispose() {
-    this.stream.getTracks().forEach(track => track.stop());
+    if (this.disposed) return;
+    this.disposed = true;
+    this.stream?.getTracks().forEach(track => track.stop());
     const gl = this.gl;
-    gl.deleteTexture(this.texture);
-    gl.deleteFramebuffer(this.framebuffer);
-    gl.deleteProgram(this.program);
+    if (gl) {
+      if (this.texture) gl.deleteTexture(this.texture);
+      if (this.framebuffer) gl.deleteFramebuffer(this.framebuffer);
+      if (this.program) gl.deleteProgram(this.program);
+    }
+    this.texture = null;
+    this.framebuffer = null;
+    this.program = null;
   }
 }
