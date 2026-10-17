@@ -971,31 +971,16 @@ class IridescentApp {
       const source = window.opener?.appInstance;
       if (!source?.sharedRenderer || source.sharedSource) throw new Error('共用背景尚未準備完成');
       this.sharedSource = source;
-      // Artwork state is shared; visibility and palette edit transactions stay local.
+      // Artwork state is shared; visibility, cursor vortex, and pointer ripples stay local per display.
       const localState = this.state;
+      const localKeys = new Set(['viewMode', 'vortexPower']);
       this.state = new Proxy(localState, {
-        get: (target, key) => key === 'viewMode' ? target[key] : source.state[key],
+        get: (target, key) => localKeys.has(key) ? target[key] : source.state[key],
         set: (target, key, value) => {
-          (key === 'viewMode' ? target : source.state)[key] = value;
+          (localKeys.has(key) ? target : source.state)[key] = value;
           return true;
         }
       });
-      this.mouse = source.mouse;
-      for (const method of ['addRipple', 'startDrag', 'queueDragUpdate']) {
-        this[method] = (x, y, ...args) => {
-          const point = this.normalizePointer(x, y);
-          if (method === 'startDrag') source.isDragging = true;
-          const result = source[method](point.x * source.viewportWidth, (1 - point.y) * source.viewportHeight, ...args);
-          if (method === 'startDrag') source.dragOwner = this;
-          return result;
-        };
-      }
-      this.endDrag = (cancelled = false) => {
-        this.isDragging = this.isDraggingTouch = false;
-        if (!source.dragOwner || source.dragOwner === this) {
-          source.endDrag(cancelled);
-        }
-      };
       source.sharedDisplays.add(this);
       source.sharedRenderer.addDisplay(this);
     } catch (error) {
@@ -1017,8 +1002,16 @@ class IridescentApp {
 
   presentSharedFrame() {
     const source = this.sharedSource || this;
-    if (source.renderSuspended || !source.sharedRenderer) return;
-    source.sharedRenderer.present();
+    if (source.renderSuspended || !source.sharedRenderer || !source.hasSharedBackground) return;
+    if (this.hasActiveInteraction()) {
+      source.renderSharedPass(this);
+      source.sharedRenderer.present([this], true);
+      return;
+    }
+    if (!source.sharedRenderer.hasIdleBackground) {
+      source.renderSharedPass(null);
+    }
+    source.sharedRenderer.present([this], true);
   }
 
   notifyFirstFrame() {
@@ -1081,6 +1074,7 @@ class IridescentApp {
 
   addRipple(clientX, clientY, strength = 1.0) {
     if (this.state.isPaused) return;
+    if (this.sharedSource) this.time = this.sharedSource.time;
     const { x, y } = this.normalizePointer(clientX, clientY);
 
     const slot = this.rippleIndex;
@@ -1102,6 +1096,7 @@ class IridescentApp {
 
   startDrag(clientX, clientY) {
     if (!this.state.dragInteraction || this.state.isPaused) return;
+    if (this.sharedSource) this.time = this.sharedSource.time;
     const { x, y } = this.normalizePointer(clientX, clientY);
     // Keep the press pending. Movement creates a segment; release creates a click ripple.
     this.dragOwner = this;
@@ -1119,6 +1114,7 @@ class IridescentApp {
 
   updateDrag(clientX, clientY) {
     if (!this.state.dragInteraction || this.state.isPaused || !this.lastDragAnchor) return;
+    if (this.sharedSource) this.time = this.sharedSource.time;
 
     // 平滑濾波：消除滑鼠/觸控微小抖動，讓弧線更為圓融連續
     if (!this.dragSmoothed) {
@@ -1223,6 +1219,7 @@ class IridescentApp {
   }
 
   retireExpiredRipples() {
+    if (this.sharedSource) this.time = this.sharedSource.time;
     for (let i = 0; i < this.maxRipples; i++) {
       const a = this.ripplesA[i];
       const b = this.ripplesB[i];
@@ -1230,6 +1227,81 @@ class IridescentApp {
         a.strength = 0;
       }
     }
+  }
+
+  hasActiveRipples() {
+    return this.ripplesA.some(ripple => ripple.strength > 0);
+  }
+
+  hasActiveInteraction() {
+    return this.state.vortexPower > 0 || this.hasActiveRipples();
+  }
+
+  updatePointerPhysics(dt) {
+    if (!this.state.isPaused) {
+      const lerpFactor = 0.12;
+      const prevX = this.mouse.x;
+      const prevY = this.mouse.y;
+      this.mouse.x += (this.mouse.targetX - this.mouse.x) * lerpFactor;
+      this.mouse.y += (this.mouse.targetY - this.mouse.y) * lerpFactor;
+
+      this.mouse.vx = (this.mouse.x - prevX) / (dt || 0.016);
+      this.mouse.vy = (this.mouse.y - prevY) / (dt || 0.016);
+      const mouseSpeed = Math.sqrt(this.mouse.vx * this.mouse.vx + this.mouse.vy * this.mouse.vy);
+
+      // 游標移動驅動漩渦：速度越快扭曲越強，停止後平滑衰退
+      const targetVortex = Math.min(mouseSpeed * this.state.cursorInfluence, 0.45);
+      this.state.vortexPower += (targetVortex - this.state.vortexPower) * Math.min(1.0, dt * 6.0);
+      if (this.state.vortexPower < 0.001) this.state.vortexPower = 0;
+    } else {
+      this.mouse.vx = 0;
+      this.mouse.vy = 0;
+      this.state.vortexPower = 0;
+    }
+    this.retireExpiredRipples();
+  }
+
+  uploadInteractionUniforms(display = this) {
+    const gl = this.gl;
+    if (!display) {
+      gl.uniform2f(this.uniforms.u_mouse, 0.5, 0.5);
+      gl.uniform1f(this.uniforms.u_vortex_power, 0.0);
+      gl.uniform1i(this.uniforms.u_ripples_enabled, 0);
+      return;
+    }
+    gl.uniform2f(this.uniforms.u_mouse, display.mouse.x, display.mouse.y);
+    gl.uniform1f(this.uniforms.u_vortex_power, display.state.vortexPower);
+    const hasRipples = display.hasActiveRipples();
+    gl.uniform1i(this.uniforms.u_ripples_enabled, hasRipples ? 1 : 0);
+    if (!hasRipples) return;
+    for (let i = 0; i < display.maxRipples; i++) {
+      const a = display.ripplesA[i];
+      const b = display.ripplesB[i];
+      display.rippleDataA[i * 4 + 0] = a.x;
+      display.rippleDataA[i * 4 + 1] = a.y;
+      display.rippleDataA[i * 4 + 2] = a.time;
+      display.rippleDataA[i * 4 + 3] = a.strength;
+
+      display.rippleDataB[i * 4 + 0] = b.x;
+      display.rippleDataB[i * 4 + 1] = b.y;
+      display.rippleDataB[i * 4 + 2] = b.time;
+      display.rippleDataB[i * 4 + 3] = b.isSegment;
+    }
+    if (this.uniforms.u_ripples_a) {
+      gl.uniform4fv(this.uniforms.u_ripples_a, display.rippleDataA);
+    }
+    if (this.uniforms.u_ripples_b) {
+      gl.uniform4fv(this.uniforms.u_ripples_b, display.rippleDataB);
+    }
+  }
+
+  renderSharedPass(display = null) {
+    if (!this.sharedRenderer || !this.gl) return;
+    this.sharedRenderer.begin();
+    this.uploadInteractionUniforms(display);
+    this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+    this.hasSharedBackground = true;
+    this.sharedRenderer.hasIdleBackground = !display;
   }
 
   drawSpacedText(ctx, text, x, y, letterSpacing) {
@@ -1931,12 +2003,14 @@ class IridescentApp {
     if (this.sharedSource) return this.sharedSource.setDragInteraction(enabled);
     this.state.dragInteraction = enabled;
     if (!enabled) {
-      this.endDrag(true);
-      for (let i = 0; i < this.maxRipples; i++) {
-        if (this.ripplesB[i].isSegment > 0.5) this.ripplesA[i].strength = 0;
+      for (const display of [this, ...(this.sharedDisplays || [])]) {
+        display.endDrag(true);
+        for (let i = 0; i < display.maxRipples; i++) {
+          if (display.ripplesB[i].isSegment > 0.5) display.ripplesA[i].strength = 0;
+        }
+        display.rippleDataA.fill(0);
+        display.rippleDataB.fill(0);
       }
-      this.rippleDataA.fill(0);
-      this.rippleDataB.fill(0);
       // Clear the displayed wake even when the artwork is paused.
       if (this.state.isPaused && this.gl && !this.contextLost) {
         this.isRendering = true;
@@ -2507,26 +2581,9 @@ class IridescentApp {
       }
     }
 
-    if (!this.state.isPaused) {
-      const lerpFactor = 0.12;
-      const prevX = this.mouse.x;
-      const prevY = this.mouse.y;
-      this.mouse.x += (this.mouse.targetX - this.mouse.x) * lerpFactor;
-      this.mouse.y += (this.mouse.targetY - this.mouse.y) * lerpFactor;
-
-      this.mouse.vx = (this.mouse.x - prevX) / (dt || 0.016);
-      this.mouse.vy = (this.mouse.y - prevY) / (dt || 0.016);
-      const mouseSpeed = Math.sqrt(this.mouse.vx * this.mouse.vx + this.mouse.vy * this.mouse.vy);
-
-      // 游標移動驅動漩渦：速度越快扭曲越強，停止後平滑衰退
-      const targetVortex = Math.min(mouseSpeed * this.state.cursorInfluence, 0.45);
-      this.state.vortexPower += (targetVortex - this.state.vortexPower) * Math.min(1.0, dt * 6.0);
-      if (this.state.vortexPower < 0.001) this.state.vortexPower = 0;
-
-    } else {
-      this.mouse.vx = 0;
-      this.mouse.vy = 0;
-      this.state.vortexPower = 0;
+    for (const display of [this, ...(this.sharedDisplays || [])]) {
+      display.time = this.time;
+      display.updatePointerPhysics(dt);
     }
 
     // 自訂色組之間平滑過渡，避免切換時整個畫面瞬間跳色
@@ -2539,36 +2596,9 @@ class IridescentApp {
       }
     }
 
-    if (this.sharedRenderer) this.sharedRenderer.begin();
+    gl.useProgram(this.program);
     gl.uniform2f(this.uniforms.u_resolution, this.outputWidth || this.canvas.width, this.outputHeight || this.canvas.height);
     gl.uniform1f(this.uniforms.u_time, this.time);
-    gl.uniform2f(this.uniforms.u_mouse, this.mouse.x, this.mouse.y);
-    // 物理擴散水波與連續拖曳航跡數據上載
-    this.retireExpiredRipples();
-    const hasRipples = this.ripplesA.some(ripple => ripple.strength > 0);
-    gl.uniform1i(this.uniforms.u_ripples_enabled, hasRipples ? 1 : 0);
-    if (hasRipples) {
-    for (let i = 0; i < this.maxRipples; i++) {
-      const a = this.ripplesA[i];
-      const b = this.ripplesB[i];
-      this.rippleDataA[i * 4 + 0] = a.x;
-      this.rippleDataA[i * 4 + 1] = a.y;
-      this.rippleDataA[i * 4 + 2] = a.time;
-      this.rippleDataA[i * 4 + 3] = a.strength;
-
-      this.rippleDataB[i * 4 + 0] = b.x;
-      this.rippleDataB[i * 4 + 1] = b.y;
-      this.rippleDataB[i * 4 + 2] = b.time;
-      this.rippleDataB[i * 4 + 3] = b.isSegment;
-    }
-    if (this.uniforms.u_ripples_a) {
-      gl.uniform4fv(this.uniforms.u_ripples_a, this.rippleDataA);
-    }
-    if (this.uniforms.u_ripples_b) {
-      gl.uniform4fv(this.uniforms.u_ripples_b, this.rippleDataB);
-    }
-
-    }
 
     // 綁定動態反白文字紋理
     if (this.textTexture) {
@@ -2585,7 +2615,6 @@ class IridescentApp {
     gl.uniform1f(this.uniforms.u_dispersion, this.state.dispersion);
     gl.uniform1f(this.uniforms.u_grain, this.state.grain);
     gl.uniform1f(this.uniforms.u_halftone_scale, this.state.halftoneScale);
-    gl.uniform1f(this.uniforms.u_vortex_power, this.state.vortexPower);
     gl.uniform1f(this.uniforms.u_defocus, this.state.defocus);
     gl.uniform1f(this.uniforms.u_contrast, this.state.contrast);
     gl.uniform3fv(this.uniforms.u_custom_palette_a, this.customPaletteRGB[0]);
@@ -2593,10 +2622,23 @@ class IridescentApp {
     gl.uniform3fv(this.uniforms.u_custom_palette_c, this.customPaletteRGB[2]);
     gl.uniform1f(this.uniforms.u_custom_palette_enabled, this.state.customPaletteEnabled ? 1.0 : 0.0);
     gl.uniform1i(this.uniforms.u_shared_background, this.sharedRenderer ? 1 : 0);
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
     if (this.sharedRenderer) {
-      this.hasSharedBackground = true;
-      this.sharedRenderer.present();
+      const displays = this.sharedRenderer.displays;
+      const activeDisplays = displays.filter(display => display.hasActiveInteraction());
+      const idleDisplays = displays.filter(display => !display.hasActiveInteraction());
+      for (const display of activeDisplays) {
+        this.renderSharedPass(display);
+        this.sharedRenderer.present([display], false);
+      }
+      if (idleDisplays.length > 0) {
+        this.renderSharedPass(null);
+        this.sharedRenderer.present(idleDisplays, false);
+      }
+      this.sharedRenderer.flush();
+    } else {
+      this.uploadInteractionUniforms(this);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
 
     if (!this.sharedRendering && !this.hasNotifiedFirstFrame) {

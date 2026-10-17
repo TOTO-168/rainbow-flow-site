@@ -1,5 +1,5 @@
 {
-  "version": "1.2.31",
-  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.31/Aura.zip",
-  "notes": "修正多螢幕副螢幕點擊與拖曳手勢被主視窗失焦中斷、暫停畫面時切換底色與調整參數未即時更新的問題；優化退出淡出滑鼠穿透、靜默更新檢查與背景閒置偵測效能。"
+  "version": "1.2.32",
+  "downloadUrl": "https://github.com/TOTO-168/rainbow-flow-site/releases/download/v1.2.32/Aura.zip",
+  "notes": "多螢幕游標漩渦與點擊／拖曳水波改為各螢幕獨立顯示，同時維持靜止時單次共用背景算圖的省電架構。"
 }

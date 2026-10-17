@@ -118,12 +118,14 @@ class SharedRenderer {
 
   begin() {
     const gl = this.gl;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.app.textTexture);
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
     gl.viewport(0, 0, this.width, this.height);
     gl.useProgram(this.app.program);
   }
 
-  present() {
+  present(displays = this.displays, flush = true) {
     const gl = this.gl;
     if (this.disposed || gl.isContextLost() || !this.app.hasSharedBackground) return;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -131,7 +133,7 @@ class SharedRenderer {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.texture);
     const theme = this.app.displayCanvas.ownerDocument.body.dataset.theme;
-    for (const display of this.displays) {
+    for (const display of displays) {
       const body = display.displayCanvas.ownerDocument.body;
       if (body.dataset.theme !== theme) body.dataset.theme = theme;
       const rect = display.sharedRect;
@@ -143,7 +145,11 @@ class SharedRenderer {
       gl.uniform2f(this.cropUniform, crop[0], crop[1]);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
-    this.track?.requestFrame?.();
+    if (flush) this.track?.requestFrame?.();
+  }
+
+  flush() {
+    if (!this.disposed) this.track?.requestFrame?.();
   }
 
   capture(display) {
